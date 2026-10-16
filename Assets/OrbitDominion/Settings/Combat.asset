@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a8d631e31c4989488fba76e69daedf0, type: 3}
+  m_Name: Combat
+  m_EditorClassIdentifier: OrbitDominion::OrbitDominion.CombatSettings
+  playerHull: 120
+  playerShield: 100
+  shieldDelay: 5
+  shieldRecharge: 14
+  weaponRange: 750
+  playerDamage: 24
+  playerFireInterval: 0.22
+  aimAssistDegrees: 5
+  hostileDamage: 8
+  hostileFireInterval: 1.1
+  hostileRange: 620
+  fighterSpeed: 75
+  engagementRange: 950
+  warningSeconds: 4
+  satelliteDamage: 18
+  satelliteFireInterval: 0.8
+  respawnSeconds: 4
+  respawnProtection: 8
+  satelliteRepairSeconds: 30

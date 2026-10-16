@@ -1,0 +1,1 @@
+{"name":"OrbitDominion.Editor","references":["OrbitDominion","Unity.InputSystem","Unity.RenderPipelines.Universal.Runtime","Unity.RenderPipelines.Core.Runtime"],"includePlatforms":["Editor"]}

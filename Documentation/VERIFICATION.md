@@ -1,0 +1,62 @@
+# Verification — settlement and rendering polish — 2026-09-29
+
+## Settlement and rendering polish pass (2026-09-29)
+- Expanded the persistent builder from five to nine stable enum values: road, arcology, industrial complex and spaceport were appended without changing the serialized values of the original five. Module footprints now reject overlap, while roads, spaceports, foundations and ramps provide driveable saved floor surfaces. Existing optional sandbox saves remain compatible.
+- Added detailed procedural road, residential, industrial and landing architecture, plus radial roads and street lighting in generated inhabited districts. Rendering now includes URP soft directional shadows, material-specific smoothness, subtle ACES color finishing, terrain microdetail and wet shores, displaced reflective water with foam, richer sky lighting, and improved orbital planet land/ocean/cloud response.
+- `Tools/Compile-Static.ps1` passed runtime, editor and tests. Unity 6000.6.0f1 setup, **59/59 EditMode tests**, **37/37 PlayMode tests** and the Windows x64 build succeeded. An initial PlayMode run rejected the Built-In-only per-light shadow-resolution property as a warning; that property was removed and the complete verification then passed with URP shadows retained.
+- Visible standalone `-sandboxCapture` exited 0 with `ORBIT_SANDBOX_CAPTURE: builds=13, rallyGates=7, saveValid=True`; the new city frame shows the rover on a marked road approaching the built settlement. Visible `-systemCapture` exited 0 with `ORBIT_SYSTEM_CAPTURE: systems=3, worlds=12, finalPhase=1202`. Neither player log contains a managed exception, null reference or shader error. The sandbox sample averaged 118.3 FPS and the wide system sample 119.9 FPS under the existing 120 FPS cap; these are staged samples on this machine, not general benchmarks.
+
+## Creative planet sandbox pass (2026-09-29)
+- Added persistent grid construction on owned planets with foundations, walls, ramps, habitats and beacons. Empire resources pay placement costs; recycling returns half. Driveable floors and blocking modules affect rover motion. Added a deterministic seven-gate Rover Rally per planet with first-win and new-record rewards.
+- Old flight-v2.json files remain valid because `SurfaceSave.sandbox` is optional. Validation bounds module counts, IDs, worlds, transforms, rotations, enum values, records and best times. The isolated capture archive validated successfully.
+- `Tools/Compile-Static.ps1` passed runtime, editor and tests. Unity 6000.6.0f1 setup, **59/59 EditMode tests**, **37/37 PlayMode tests** and Windows x64 build succeeded. The new PlayMode case places paid modules, completes a rally, round-trips JSON, reconstructs the scene and retains the record.
+- Visible standalone `-sandboxCapture` exited 0 with `ORBIT_SANDBOX_CAPTURE: builds=7, rallyGates=7, saveValid=True`. Reviewed builder and rally frames at 1600×900. No managed exception, null-reference or shader compile error appears in `Logs/sandbox-player.log`. Captures are `Documentation/Screenshots/sandbox-builder.png` and `sandbox-rally.png`.
+
+## Orbital-system pass
+- Added deterministic stellar orbits, moving planetary anchors, moon revolution, dynamic fleet destinations, star-relative light and exclusion, and optional saved orbital time. Older flight-v2.json files default to the authored epoch without a schema-version change.
+- `Tools/Compile-Static.ps1` passed for runtime, editor and tests. Unity setup succeeded after refreshing the existing Personal license in Hub. **57 EditMode tests and 36 PlayMode tests passed, zero failed** (`TestResults/editmode.xml`, `TestResults/playmode.xml`). The new cases cover Kepler period/epoch and PlayMode anchor, pause and save restoration. An initial PlayMode run exposed a stale fixed-coordinate rescue expectation; its test now checks the moving home orbit and passes.
+- Windows x64 build succeeded with Unity 6000.6.0f1. The visible standalone `-systemCapture` session exited 0, recorded three systems at epoch and after twenty accelerated minutes, and logged no managed exceptions or shader compilation errors (`Logs/system-player.log`). Reviewed the Solace before/after pair and the Veil and Cinder epoch views; the stars, separate orbital rings and planet motion are visible. Six captures are in `Documentation/Screenshots/system-*.png`. The first distant QA frame was obscured by the ship because the staged camera shared its position; this was corrected before the reviewed captures.
+
+## Earlier surface-rover expansion
+- The user extended the original nine-phase prototype with planetary landing. The original brief's orbit-only line is superseded by this request.
+- **56 EditMode tests passed, zero failed; 35 PlayMode tests passed, zero failed.** Rover rules cover acceleration, steering, reversing, coast-down and boost. PlayMode uses real W/D input for rover drive and steering, verifies the six-wheel scene and ocean pontoons, then recovers a relic, saves, returns to orbit and restores the expedition. Existing terrain, biome, economy, combat and conquest tests remain green.
+- Unity 6000.6.0f1 setup and Windows x64 build succeeded with the rover and HUD.
+- The visible `-surfaceCapture` player run checks temperate, ocean, neutral inhabited, volcanic, toxic, rocky, desert and frozen landing regions; it collects one relic and validates an isolated QA archive. Screenshots and player outcome are in Reports/build-summary.json. QA stages views and does not touch player saves.
+- Surface exploration uses a finite deterministic local region for each world. The rover follows slopes and deploys flotation pontoons on open water; this is simplified vehicle motion without physical wheel collision, underwater driving or damage. NPCs and creatures provide ambient motion; they do not yet offer dialogue, quests, combat or ecological simulation. Player construction and the first rally were added in the later 2026-09-29 pass above.
+- Reviewed standalone player screenshots of the rover on the temperate coast, Elysia, inhabited Ithaca and beside a relic. The coast, water, sky, vegetation and raised inhabited district still render. Surface art remains stylized procedural geometry; the broader orbital realism and combat quality pass requested for later has not been performed.
+
+## Original prototype verification (2026-09-18)
+- Unity 6000.6.0f1 imports the project and performs idempotent setup. Input actions and Sector.asset are generated without replacing existing tuning.
+- **51 EditMode cases passed, zero failed.** Coverage includes flight/discovery/economy/combat rules, twelve-world generation, capture continuity and restrictions, protection costs/cooldowns, home ownership, victory and discovery-gated dynamic ownership.
+- **33 PlayMode tests passed, zero failed.** Coverage includes real input, scanning, construction, weapons/occlusion, rescue, satellite repair, the sector chart, investigation, neutral retaliation, conquest, AI spending/fleet transit/occupation, tutorial prerequisites and full-save reconstruction/migration/corruption.
+- Windows x64 standalone build succeeds at Builds/Windows/OrbitDominion.exe. A subsequent presentation-only USS adjustment reduces chart spacing so the final Continue button fits at 1600×900; the executable was rebuilt. No gameplay code changed after the passing tests.
+- The isolated sector scenario exercises real investigation, protection, capture and archive validation. QA deliberately stages viewpoints, scan/destruction preconditions and held actions; this is not a human campaign walkthrough. It writes only a QA archive under Builds/Windows and never accesses player saves.
+- Reviewed frontier, anomaly, shield, chart, capture progress, conquered ownership/civilian preservation and Earth, volcanic, toxic and rocky world views. Initial review found the chart's final button below the viewport; final capture checks the corrected layout.
+- The isolated combat scenario uses real damage, cooldowns, AI and targeting with scripted aiming. Final outcomes and player exit codes are recorded in Reports/build-summary.json.
+- Player logs are checked for managed exceptions and shader compilation errors. URP warns about stripped unused Gaussian/Bokeh depth-of-field and Panini passes; these effects are not enabled.
+
+## Persistence and regression findings
+- flight-v2.json retains ship pose/velocity/pulse/health, discoveries, owners/buildings/resources/construction, combat actors/repairs, fleets/destinations, AI resources/timers, protection, investigation, tutorial flags and victory.
+- Integration tests write/read the archive, reload the scene and reconstruct meaningful state without duplicate controllers/entities. Legacy three-world archives migrate into twelve worlds without rewriting originals.
+- Validated temporary writes replace the primary atomically with backup. Corrupt/incompatible primaries are preserved and block replacement, including after validated backup recovery. Failed migration blocks accidental default saves.
+- A regression test exposed provoked neutral satellites rebuilding as hostile after Union conquest. Capture now clears provocation and satellite faction logic respects the current owner; the regression passes.
+- Enemy aiming now rotates physically. The encounter test allows rotation and the next weapon cooldown instead of relying on instant alignment.
+- Tests and capture scenarios isolate persistence from player saves.
+
+## Evidence
+- Logs/setup.log, editmode.log, playmode.log, build.log, sector-player.log and combat-player.log.
+- TestResults/editmode.xml and playmode.xml, copied to Documentation/Reports.
+- Documentation/Reports/build-summary.json records counts, outcomes, hashes, timestamps and frame samples from the final player.
+- Documentation/Screenshots contains final sector/combat captures. Older exploration/colony images remain historical evidence from earlier phases.
+
+## Performance and limits
+- Reusable pools bound beam and impact/explosion objects. Generated ship and planet meshes are cleaned up; distant planets use reduced meshes and distant AI updates movement/targeting less frequently.
+- Frame samples exclude warmup and paused frames. They describe this machine and scripted views only; screenshots, frame caps and staged controllers affect measurements. They are not a general hardware benchmark.
+- A complete uninterrupted human-controlled 20–35-minute tutorial/campaign, multi-hour endurance, other operating systems and low-end hardware have **not** been verified. Automated tests cannot establish overall game balance or enjoyment.
+- Art is procedural prototype geometry/materials. Cities can overlap ocean/cloud regions; ring debris is visual only. No audio or complete gamepad bindings. Enemy tactics/diplomacy remain simple.
+- Multiplayer, accounts/backends, monetization, FPS combat, detailed terrain/citizens and hundreds of systems remain outside the current prototype. Landing was added by the later user request.
+
+## Reproduce
+Run Tools/Verify-Unity.ps1 -Build with the installed licensed editor. Individual stages are Setup, EditMode, PlayMode and Build. Review NUnit XML, not just process exit codes.
+
+Run the executable visibly with -surfaceCapture, -sandboxCapture, -systemCapture, -sectorCapture or -combatCapture and -screen-width 1600 -screen-height 900 -screen-fullscreen 0. Hidden-window captures can be black. Normal play uses no capture flag and loads the player's full save automatically.
