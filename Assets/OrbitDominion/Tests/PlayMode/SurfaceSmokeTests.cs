@@ -47,6 +47,9 @@ namespace OrbitDominion.Tests
             var world = Object.FindAnyObjectByType<PrototypeBootstrap>();
             Assert.IsFalse(world.Surface.Active);
             var home = world.Worlds[0];
+            var orbitAmbientMode=RenderSettings.ambientMode;
+            Color orbitSky=RenderSettings.ambientSkyColor,orbitEquator=RenderSettings.ambientEquatorColor,orbitGround=RenderSettings.ambientGroundColor;
+            float orbitAmbientIntensity=RenderSettings.ambientIntensity;
             world.Player.transform.position = home.transform.position + Vector3.back * (home.Definition.radius + 180);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.L));
             yield return null; yield return null;
@@ -85,6 +88,11 @@ namespace OrbitDominion.Tests
             Assert.IsFalse(world.Surface.Active);
             Assert.IsFalse(world.Player.FlightDisabled);
             Assert.IsTrue(Object.FindAnyObjectByType<ChaseCamera>().enabled);
+            Assert.AreEqual(orbitAmbientMode,RenderSettings.ambientMode);
+            Assert.AreEqual(orbitSky,RenderSettings.ambientSkyColor);
+            Assert.AreEqual(orbitEquator,RenderSettings.ambientEquatorColor);
+            Assert.AreEqual(orbitGround,RenderSettings.ambientGroundColor);
+            Assert.AreEqual(orbitAmbientIntensity,RenderSettings.ambientIntensity);
             Assert.IsTrue(world.Session.Restore(serialized));
             Assert.IsTrue(world.Surface.Active);
             Assert.AreEqual(prior + 1, world.Surface.RelicsFound);

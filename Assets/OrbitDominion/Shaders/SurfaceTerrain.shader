@@ -4,6 +4,11 @@ Shader "Orbit Dominion/SurfaceTerrain"
   _Seed("Variation", Float) = 1
   _WaterLevel("Water level", Float) = 0
   _Wetness("Shore wetness", Range(0,1)) = .45
+  _DetailAlbedo("Photoreal detail",2D)="gray" {}
+  _DetailNormal("Photoreal normal",2D)="bump" {}
+  _DetailScale("Detail metres",Float)=3.25
+  _DetailStrength("Detail strength",Range(0,1))=.7
+  _NormalStrength("Normal strength",Range(0,2))=.62
  }
  SubShader
  {
@@ -18,8 +23,10 @@ Shader "Orbit Dominion/SurfaceTerrain"
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
    CBUFFER_START(UnityPerMaterial)
-   float _Seed,_WaterLevel,_Wetness;
+   float _Seed,_WaterLevel,_Wetness,_DetailScale,_DetailStrength,_NormalStrength;
    CBUFFER_END
+   TEXTURE2D(_DetailAlbedo); SAMPLER(sampler_DetailAlbedo);
+   TEXTURE2D(_DetailNormal); SAMPLER(sampler_DetailNormal);
    struct A { float4 positionOS:POSITION; float3 normalOS:NORMAL; float4 color:COLOR; float2 uv:TEXCOORD0; };
    struct V
    {
@@ -49,9 +56,14 @@ Shader "Orbit Dominion/SurfaceTerrain"
     float dx=terrainNoise(i.uv+texel)-terrainNoise(i.uv-texel);
     float dz=terrainNoise(i.uv+texel.yx)-terrainNoise(i.uv-texel.yx);
     float slope=1-saturate(i.normalWS.y);
-    float3 normal=normalize(i.normalWS+float3(-dx,0,-dz)*lerp(.55,.18,slope));
+    float2 detailUv=i.local.xz/max(.25,_DetailScale);
+    float3 detailAlbedo=SAMPLE_TEXTURE2D(_DetailAlbedo,sampler_DetailAlbedo,detailUv).rgb;
+    float3 detailNormal=UnpackNormalScale(SAMPLE_TEXTURE2D(_DetailNormal,sampler_DetailNormal,detailUv),_NormalStrength);
+    float3 normal=normalize(i.normalWS+float3(-dx+detailNormal.x*.28,0,-dz+detailNormal.y*.28)*lerp(.7,.24,slope));
     float mineral=noise(i.uv*5.7+_Seed*11);
     float3 color=i.color.rgb*lerp(.83,1.13,grain);
+    float detailLuma=dot(detailAlbedo,float3(.2126,.7152,.0722));
+    color*=lerp(1,lerp(.58,1.42,detailLuma),_DetailStrength);
     color=lerp(color,color*float3(.72,.75,.78),smoothstep(.82,.97,mineral)*(.2+slope*.35));
     float shoreline=1-smoothstep(_WaterLevel+.15,_WaterLevel+2.2,i.local.y);
     color=lerp(color,color*.58,shoreline*_Wetness);

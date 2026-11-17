@@ -12,8 +12,12 @@ namespace OrbitDominion
             Color[] colors={new(1,.75f,.35f),new(.45f,.7f,1),new(1,.25f,.07f)};
             for(int i=0;i<3;i++)
             {
-                var mat=VisualFactory.Lit(colors[i],0,colors[i]*3);materials.Add(mat);
-                VisualFactory.Shape(GalaxyCatalog.Systems[i]+" star",PrimitiveType.Sphere,transform,GalaxyCatalog.StarCenters[i],Vector3.one*GalaxyCatalog.StarRadius*2,mat);
+                var mat=new Material(Shader.Find("Orbit Dominion/Star"));mat.SetColor("_ColorA",Color.Lerp(colors[i],Color.white,.46f));
+                mat.SetColor("_ColorB",colors[i]*.48f);mat.SetFloat("_Seed",1.7f+i*4.31f);mat.SetFloat("_Intensity",i==1?3.8f:3.25f);materials.Add(mat);
+                VisualFactory.Shape(GalaxyCatalog.Systems[i]+" / stellar photosphere",PrimitiveType.Sphere,transform,GalaxyCatalog.StarCenters[i],Vector3.one*GalaxyCatalog.StarRadius*2,mat);
+                var corona=new Material(Shader.Find("Orbit Dominion/StarCorona"));corona.SetColor("_Color",colors[i]);corona.SetFloat("_Seed",i*7.13f);
+                corona.SetFloat("_Intensity",i==1?1.35f:1.1f);materials.Add(corona);
+                VisualFactory.Shape(GalaxyCatalog.Systems[i]+" / stellar corona",PrimitiveType.Sphere,transform,GalaxyCatalog.StarCenters[i],Vector3.one*GalaxyCatalog.StarRadius*2.34f,corona);
             }
             for(int i=0;i<3;i++)
             {
@@ -50,7 +54,9 @@ namespace OrbitDominion
             int system=world.Sector.CurrentSystem;Color tint=system==0?new Color(.045f,.12f,.24f):system==1?new Color(.13f,.06f,.3f):new Color(.22f,.04f,.025f);
             RenderSettings.skybox.SetColor("_Tint",Color.Lerp(RenderSettings.skybox.GetColor("_Tint"),tint,.08f));
             sun.color=Color.Lerp(sun.color,system==0?new Color(1,.92f,.83f):system==1?new Color(.7f,.85f,1):new Color(1,.58f,.34f),.08f);
-            Vector3 starlight=world.Player.transform.position-GalaxyCatalog.StarCenters[system];
+            // Local landing regions are staged in daylight, matching the sun in SurfaceSky.
+            Vector3 starlight=world.Surface!=null&&world.Surface.Active?new Vector3(-.58f,-.36f,-.72f):
+                world.Player.transform.position-GalaxyCatalog.StarCenters[system];
             if(starlight.sqrMagnitude>1)sun.transform.rotation=Quaternion.LookRotation(starlight.normalized);
         }
         void OnDestroy(){foreach(var material in materials)if(material!=null)Destroy(material);}

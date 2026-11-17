@@ -54,7 +54,7 @@ namespace OrbitDominion
             sun.shadowBias=.035f;sun.shadowNormalBias=.28f;
             var volume=new GameObject("Global cinematic volume").AddComponent<Volume>(); volume.transform.SetParent(transform);volume.isGlobal=true;
             volume.sharedProfile=cinematicProfile;
-            var metal=VisualFactory.Lit(new Color(.18f,.24f,.31f),.75f);
+            var metal=VisualFactory.TexturedLit("PbrConstruction",new Color(.46f,.54f,.62f),.75f,.66f);
             var cyan=VisualFactory.Lit(new Color(.02f,.4f,.6f),.5f,new Color(.06f,.7f,1.5f));
             Player=new GameObject("Player / Wayfarer").AddComponent<PlayerFlight>();Player.transform.SetParent(transform);
             Player.transform.SetPositionAndRotation(StartPosition,StartRotation);Player.settings=settings;Player.worlds=Worlds;Player.Initialize(input);
@@ -141,6 +141,12 @@ namespace OrbitDominion
                 yield return new WaitForSeconds(1);
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../system-"+system+"-advanced.png"));
                 yield return new WaitForSeconds(1);
+                camera.fieldOfView=55;
+                Vector3 stellarView=star+new Vector3(0,.35f,-1)*GalaxyCatalog.StarRadius*3.6f;
+                camera.transform.SetPositionAndRotation(stellarView,Quaternion.LookRotation(star-stellarView));
+                yield return new WaitForSeconds(1);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../system-"+system+"-star.png"));
+                yield return new WaitForSeconds(1);camera.fieldOfView=85;
             }
             Debug.Log($"ORBIT_SYSTEM_CAPTURE: systems={GalaxyCatalog.Systems.Length}, worlds={Worlds.Length}, finalPhase={Orbits.Elapsed:0}");
             Application.Quit();

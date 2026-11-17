@@ -17,6 +17,13 @@ namespace OrbitDominion.Editor
         {
             Directory.CreateDirectory("Assets/OrbitDominion/Settings"); Directory.CreateDirectory("Assets/OrbitDominion/Scenes");
             AssetDatabase.Refresh();
+            ConfigureTexture("Assets/OrbitDominion/Resources/Textures/TerrainMicroAlbedo.png",false,true);
+            ConfigureTexture("Assets/OrbitDominion/Resources/Textures/TerrainMicroNormal.png",true,true);
+            ConfigureTexture("Assets/OrbitDominion/Resources/Textures/ConstructionPanelAlbedo.png",false,true);
+            ConfigureTexture("Assets/OrbitDominion/Resources/Textures/ConstructionPanelNormal.png",true,true);
+            ConfigureTexture("Assets/OrbitDominion/Resources/Textures/RoadAsphaltAlbedo.png",false,true);
+            ConfigureTexture("Assets/OrbitDominion/Resources/Textures/RoadAsphaltNormal.png",true,true);
+            ConfigureTexture("Assets/OrbitDominion/Resources/Textures/TemperateFoliage.png",false,false,true);
             var settings=AssetDatabase.LoadAssetAtPath<FlightSettings>("Assets/OrbitDominion/Settings/Flight.asset");
             if(settings==null){settings=ScriptableObject.CreateInstance<FlightSettings>();AssetDatabase.CreateAsset(settings,"Assets/OrbitDominion/Settings/Flight.asset");}
             var discovery=AssetDatabase.LoadAssetAtPath<DiscoverySettings>("Assets/OrbitDominion/Settings/Discovery.asset");
@@ -68,6 +75,10 @@ namespace OrbitDominion.Editor
                     material.EnableKeyword("_EMISSION");EditorUtility.SetDirty(material);
                 }
             }
+            EnsurePbrMaterial("PbrConstruction","ConstructionPanelAlbedo","ConstructionPanelNormal",.72f,.63f,2);
+            EnsurePbrMaterial("PbrRoad","RoadAsphaltAlbedo","RoadAsphaltNormal",.02f,.17f,2.4f);
+            EnsurePbrMaterial("PbrTerrain","TerrainMicroAlbedo","TerrainMicroNormal",.01f,.2f,2.8f);
+            EnsureFoliageMaterial();
             const string volumePath="Assets/OrbitDominion/Settings/CinematicVolume.asset";
             var profile=AssetDatabase.LoadAssetAtPath<VolumeProfile>(volumePath);
             if(profile==null)
@@ -87,6 +98,15 @@ namespace OrbitDominion.Editor
             var pipeline=AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>("Assets/Settings/PC_RPAsset.asset");
             if(pipeline==null)throw new System.InvalidOperationException("Official URP template PC pipeline is missing.");
             pipeline.supportsHDR=true;pipeline.msaaSampleCount=4;GraphicsSettings.defaultRenderPipeline=pipeline;QualitySettings.renderPipeline=pipeline;
+            const string pipelinePath="Assets/Settings/PC_RPAsset.asset",qualityMarker="OrbitDominion.PhotorealQuality.v1";
+            if(!HasSetupMarker(pipelinePath,qualityMarker))
+            {
+                // Apply the requested quality upgrade once; subsequent setup keeps user tuning.
+                pipeline.renderScale=Mathf.Max(pipeline.renderScale,1.1f);
+                pipeline.shadowDistance=Mathf.Max(pipeline.shadowDistance,220);
+                pipeline.mainLightShadowmapResolution=Mathf.Max(pipeline.mainLightShadowmapResolution,4096);
+                MarkSetup(pipelinePath,qualityMarker);
+            }
             PlayerSettings.companyName="Orbit Dominion";PlayerSettings.productName="Orbit Dominion";PlayerSettings.defaultScreenWidth=1600;PlayerSettings.defaultScreenHeight=900;
             PlayerSettings.fullScreenMode=FullScreenMode.Windowed;PlayerSettings.runInBackground=true;
             var playerSettings=new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/ProjectSettings.asset")[0]);
@@ -96,7 +116,7 @@ namespace OrbitDominion.Editor
             for(int i=shaders.arraySize-1;i>=0;i--)
                 if(shaders.GetArrayElementAtIndex(i).objectReferenceValue==Shader.Find("Universal Render Pipeline/Lit"))
                 {shaders.GetArrayElementAtIndex(i).objectReferenceValue=null;shaders.DeleteArrayElementAtIndex(i);}
-            foreach(string name in new[]{"Orbit Dominion/Planet","Orbit Dominion/Atmosphere","Orbit Dominion/Space","Orbit Dominion/Rings","Orbit Dominion/Scan","Orbit Dominion/SurfaceTerrain","Orbit Dominion/SurfaceWater","Orbit Dominion/SurfaceSky"})
+            foreach(string name in new[]{"Orbit Dominion/Planet","Orbit Dominion/Atmosphere","Orbit Dominion/Space","Orbit Dominion/Rings","Orbit Dominion/Scan","Orbit Dominion/SurfaceTerrain","Orbit Dominion/SurfaceWater","Orbit Dominion/SurfaceSky","Orbit Dominion/Star","Orbit Dominion/StarCorona"})
             {
                 var shader=Shader.Find(name);bool exists=false;for(int i=0;i<shaders.arraySize;i++)exists|=shaders.GetArrayElementAtIndex(i).objectReferenceValue==shader;
                 if(!exists&&shader!=null){shaders.InsertArrayElementAtIndex(shaders.arraySize);shaders.GetArrayElementAtIndex(shaders.arraySize-1).objectReferenceValue=shader;}
@@ -138,6 +158,57 @@ namespace OrbitDominion.Editor
             EditorBuildSettings.scenes=new[]{new EditorBuildSettingsScene(ScenePath,true)};
             EditorUtility.SetDirty(pipeline);AssetDatabase.SaveAssets();
             Debug.Log("ORBIT_SETUP_OK: Solace scene, URP, input and configuration ready.");
+        }
+        static void ConfigureTexture(string path,bool normal,bool repeat,bool alpha=false)
+        {
+            const string marker="OrbitDominion.PbrTexture.v1";
+            if(HasSetupMarker(path,marker))return;
+            if(!(AssetImporter.GetAtPath(path) is TextureImporter importer))throw new System.InvalidOperationException("Required texture is missing: "+path);
+            importer.textureType=normal?TextureImporterType.NormalMap:TextureImporterType.Default;
+            importer.wrapMode=repeat?TextureWrapMode.Repeat:TextureWrapMode.Clamp;importer.mipmapEnabled=true;
+            importer.filterMode=FilterMode.Trilinear;importer.anisoLevel=8;importer.maxTextureSize=2048;
+            importer.textureCompression=TextureImporterCompression.CompressedHQ;importer.npotScale=TextureImporterNPOTScale.ToNearest;
+            importer.sRGBTexture=!normal;importer.alphaIsTransparency=alpha;
+            if(alpha){importer.mipMapsPreserveCoverage=true;importer.alphaTestReferenceValue=.36f;}
+            if(normal){importer.convertToNormalmap=true;importer.heightmapScale=.065f;}
+            importer.userData+=(string.IsNullOrEmpty(importer.userData)?"":"\n")+marker;
+            importer.SaveAndReimport();
+        }
+        static bool HasSetupMarker(string path,string marker)=>AssetImporter.GetAtPath(path)?.userData?.Contains(marker)==true;
+        static void MarkSetup(string path,string marker)
+        {
+            var importer=AssetImporter.GetAtPath(path);
+            importer.userData+=(string.IsNullOrEmpty(importer.userData)?"":"\n")+marker;
+            AssetDatabase.WriteImportSettingsIfDirty(path);
+        }
+        static void EnsurePbrMaterial(string name,string albedoName,string normalName,float metallic,float smoothness,float tiling)
+        {
+            string path="Assets/OrbitDominion/Resources/"+name+".mat";
+            var material=AssetDatabase.LoadAssetAtPath<Material>(path);
+            if(material!=null)return;
+            material=new Material(Shader.Find("Universal Render Pipeline/Lit"));AssetDatabase.CreateAsset(material,path);
+            material.SetTexture("_BaseMap",AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/OrbitDominion/Resources/Textures/"+albedoName+".png"));
+            material.SetTexture("_BumpMap",AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/OrbitDominion/Resources/Textures/"+normalName+".png"));
+            material.SetTextureScale("_BaseMap",Vector2.one*tiling);material.SetFloat("_BumpScale",.65f);
+            material.SetFloat("_Metallic",metallic);material.SetFloat("_Smoothness",smoothness);material.EnableKeyword("_NORMALMAP");
+            EditorUtility.SetDirty(material);
+        }
+        static void EnsureFoliageMaterial()
+        {
+            const string path="Assets/OrbitDominion/Resources/FoliageCutout.mat";
+            const string marker="OrbitDominion.Foliage.v1";
+            if(HasSetupMarker(path,marker))return;
+            var material=AssetDatabase.LoadAssetAtPath<Material>(path);
+            if(material==null){material=new Material(Shader.Find("Universal Render Pipeline/Lit"));AssetDatabase.CreateAsset(material,path);}
+            material.SetTexture("_BaseMap",AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/OrbitDominion/Resources/Textures/TemperateFoliage.png"));
+            material.color=Color.white;material.SetFloat("_Metallic",0);material.SetFloat("_Smoothness",.22f);
+            // The card mesh has separate front/back faces and normals. Cull the hidden side
+            // so coplanar faces do not compete for depth or shade with the wrong normal.
+            material.SetFloat("_AlphaClip",1);material.SetFloat("_Cutoff",.36f);material.SetFloat("_Cull",(float)CullMode.Back);
+            material.SetFloat("_AlphaToMask",1);material.SetOverrideTag("RenderType","TransparentCutout");
+            material.EnableKeyword("_ALPHATEST_ON");material.doubleSidedGI=true;material.renderQueue=(int)RenderQueue.AlphaTest;
+            EditorUtility.SetDirty(material);
+            MarkSetup(path,marker);
         }
         [MenuItem("Tools/Orbit Dominion/Build Windows")]
         public static void BuildWindows()

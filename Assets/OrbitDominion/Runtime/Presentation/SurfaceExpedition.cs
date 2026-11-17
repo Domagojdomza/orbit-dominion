@@ -31,11 +31,14 @@ namespace OrbitDominion
         int buildLayer, buildRotation, rallyCheckpoint;
         SurfaceBuildKind selectedBuild = SurfaceBuildKind.Foundation;
         bool buildMode, rallyActive;
-        Material buildAlloy, buildPanel, buildGlass, buildPreview, buildConcrete, buildRoad, buildMarking, buildHazard, rallyIdle, rallyCurrent;
+        Material buildAlloy, buildPanel, buildGlass, buildPreview, buildConcrete, buildRoad, buildMarking, buildHazard, foliageCard, rallyIdle, rallyCurrent;
         bool previousFog;
         FogMode previousFogMode;
         Color previousFogColor;
         float previousFogDensity, previousFarClip;
+        UnityEngine.Rendering.AmbientMode previousAmbientMode;
+        Color previousAmbientSky,previousAmbientEquator,previousAmbientGround;
+        float previousAmbientIntensity;
         CameraClearFlags previousClearFlags;
         Color previousBackground;
 
@@ -119,6 +122,9 @@ namespace OrbitDominion
             previousFogMode = RenderSettings.fogMode;
             previousFogColor = RenderSettings.fogColor;
             previousFogDensity = RenderSettings.fogDensity;
+            previousAmbientMode=RenderSettings.ambientMode;previousAmbientSky=RenderSettings.ambientSkyColor;
+            previousAmbientEquator=RenderSettings.ambientEquatorColor;previousAmbientGround=RenderSettings.ambientGroundColor;
+            previousAmbientIntensity=RenderSettings.ambientIntensity;
             sceneRoot = new GameObject("Surface expedition / " + destination.Definition.title).transform;
             sceneRoot.SetParent(transform, false);
             sceneRoot.position = SurfaceOrigin;
@@ -137,6 +143,10 @@ namespace OrbitDominion
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = SkyColor();
             RenderSettings.fogDensity = Biome == SurfaceBiome.Ocean ? .0018f : .0028f;
+            SurfacePalette lightingPalette=SurfacePalette.For(Biome);RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor=lightingPalette.zenith*.45f;RenderSettings.ambientEquatorColor=lightingPalette.horizon*.34f;
+            RenderSettings.ambientGroundColor=lightingPalette.stone*.18f;RenderSettings.ambientIntensity=1;
+            BuildSurfaceReflection();
             Message = "ROVER DEPLOYED / " + destination.Definition.title + " · Drive and recover hidden relics";
             UpdateCamera(true);
         }
@@ -162,6 +172,9 @@ namespace OrbitDominion
             RenderSettings.fogMode = previousFogMode;
             RenderSettings.fogColor = previousFogColor;
             RenderSettings.fogDensity = previousFogDensity;
+            RenderSettings.ambientMode=previousAmbientMode;RenderSettings.ambientSkyColor=previousAmbientSky;
+            RenderSettings.ambientEquatorColor=previousAmbientEquator;RenderSettings.ambientGroundColor=previousAmbientGround;
+            RenderSettings.ambientIntensity=previousAmbientIntensity;
             chase.enabled = true;
             world.Player.FlightDisabled = false;
             Message = "ORBIT RESTORED / " + name;
@@ -482,6 +495,11 @@ namespace OrbitDominion
             return result;
         }
 
+        Material MakeTextured(string resource,Color color,float metallic,float smoothness)
+        {
+            var result=VisualFactory.TexturedLit(resource,color,metallic,smoothness);materials.Add(result);return result;
+        }
+
         GameObject Shape(string name, PrimitiveType type, Transform parent, Vector3 position, Vector3 size, Material material)
             => VisualFactory.Shape(name, type, parent, position, size, material);
 
@@ -508,6 +526,7 @@ namespace OrbitDominion
             var bark = Make(new Color(.28f, .22f, .15f));
             var foliage = Make(Color.Lerp(palette.lowland, new Color(.18f, .4f, .13f), .52f));
             var foliageLight = Make(Color.Lerp(palette.lowland, new Color(.45f, .58f, .21f), .5f));
+            foliageCard=biome==SurfaceBiome.Temperate?MakeTextured("FoliageCutout",Color.white,0,.22f):null;
             var glow = Make(biome == SurfaceBiome.Volcanic ? new Color(1, .28f, .08f) : new Color(.13f, .9f, .85f), .1f,
                 biome == SurfaceBiome.Volcanic ? new Color(2.5f, .2f, .04f) : new Color(.1f, 1.3f, 1.1f));
             BuildSky(palette, seed);
@@ -543,20 +562,20 @@ namespace OrbitDominion
             }
             if (biome == SurfaceBiome.Temperate || biome == SurfaceBiome.Toxic || biome == SurfaceBiome.Ocean) BuildFauna(random, dark, accent, glow);
             int faction = world.Empire.State.Get(planet.Definition.id).faction;
-            if (faction > 0) BuildCivilization(random, faction, dark, accent, glow);
-            BuildLander(dark, accent, glow);
+            if (faction > 0) BuildCivilization(random, faction, MakeTextured("PbrConstruction",new Color(.3f,.34f,.36f),.68f,.55f), accent, glow);
+            BuildLander(MakeTextured("PbrConstruction",new Color(.38f,.42f,.45f),.72f,.62f), accent, glow);
             BuildRelics(seed, glow, dark);
         }
 
         void BuildPlayerStructures()
         {
             SurfacePalette palette = SurfacePalette.For(Biome);
-            buildAlloy = Make(new Color(.13f, .17f, .2f), .8f, null, .72f);
-            buildPanel = Make(Color.Lerp(palette.stone, new Color(.48f, .56f, .58f), .42f), .38f, null, .34f);
+            buildAlloy = MakeTextured("PbrConstruction",new Color(.42f,.48f,.52f),.8f,.72f);
+            buildPanel = MakeTextured("PbrConstruction",Color.Lerp(palette.stone,new Color(.82f,.86f,.87f),.7f),.38f,.4f);
             buildGlass = Make(new Color(.05f, .32f, .42f), .2f, new Color(.05f, .75f, 1.15f), .88f);
             buildPreview = Make(new Color(.08f, .7f, .72f), .1f, new Color(.08f, 1.6f, 1.8f));
-            buildConcrete = Make(Color.Lerp(palette.stone, new Color(.31f, .34f, .35f), .62f), .04f, null, .17f);
-            buildRoad = Make(new Color(.065f, .073f, .078f), .05f, null, .08f);
+            buildConcrete = MakeTextured("PbrTerrain",Color.Lerp(palette.stone,Color.white,.56f),.04f,.17f);
+            buildRoad = MakeTextured("PbrRoad",Color.white,.05f,.12f);
             buildMarking = Make(new Color(.78f, .72f, .43f), .02f, null, .22f);
             buildHazard = Make(new Color(.88f, .34f, .055f), .25f, new Color(.32f, .055f, .008f));
             foreach (var build in sandbox.Builds) if (build.planet == PlanetId) CreateBuildVisual(build);
@@ -809,6 +828,11 @@ namespace OrbitDominion
                 material.SetFloat("_Seed", (seed & 65535) * .001f);
                 material.SetFloat("_WaterLevel", SurfaceRules.WaterLevel(Biome));
                 material.SetFloat("_Wetness", Biome == SurfaceBiome.Desert ? .08f : Biome == SurfaceBiome.Frozen ? .24f : Biome == SurfaceBiome.Volcanic ? .14f : .68f);
+                material.SetTexture("_DetailAlbedo",Resources.Load<Texture2D>("Textures/TerrainMicroAlbedo"));
+                material.SetTexture("_DetailNormal",Resources.Load<Texture2D>("Textures/TerrainMicroNormal"));
+                material.SetFloat("_DetailScale",Biome==SurfaceBiome.Desert?5.5f:Biome==SurfaceBiome.Frozen?4.2f:3.25f);
+                material.SetFloat("_DetailStrength",Biome==SurfaceBiome.Ocean?.35f:.7f);
+                material.SetFloat("_NormalStrength",Biome==SurfaceBiome.Frozen?.25f:.62f);
                 materials.Add(material);
             }
             objectRoot.AddComponent<MeshRenderer>().sharedMaterial = material;
@@ -862,15 +886,25 @@ namespace OrbitDominion
         void BuildPlant(Vector3 p, System.Random random, Material trunk, Material leaf, Material light)
         {
             float height = 4 + (float)random.NextDouble() * 5;
-            Shape("Grove / trunk", PrimitiveType.Cylinder, sceneRoot, p + Vector3.up * height * .5f, new Vector3(.36f, height * .5f, .36f), trunk);
-            for (int j = 0; j < 5; j++)
+            Shape("Grove / trunk", PrimitiveType.Cylinder, sceneRoot, p + Vector3.up * height * .5f, new Vector3(.27f, height * .5f, .27f), trunk);
+            for (int j = 0; j < 4; j++)
             {
-                float angle = j * Mathf.PI * 2 / 5 + (float)random.NextDouble() * .35f;
-                float reach = 1.2f + (float)random.NextDouble() * 1.1f;
-                Vector3 crown = p + new Vector3(Mathf.Cos(angle) * reach, height + (float)random.NextDouble() * 1.6f, Mathf.Sin(angle) * reach);
-                Shape("Grove / leafy crown", PrimitiveType.Sphere, sceneRoot, crown,
-                    new Vector3(2.5f + reach * .5f, 2.2f + reach * .3f, 2.7f + reach * .5f), j % 3 == 0 ? light : leaf);
+                float angle = j * Mathf.PI * .5f + (float)random.NextDouble() * .5f;
+                float reach = 1.15f + (float)random.NextDouble() * 1.3f;
+                Vector3 branchBase=p+Vector3.up*(height*(.5f+j*.09f));
+                Vector3 crown=p+new Vector3(Mathf.Cos(angle)*reach,height*.82f+(float)random.NextDouble()*2,Mathf.Sin(angle)*reach);
+                BuildBeam("Grove / branch",sceneRoot,branchBase,crown,.09f,trunk);
+                if(foliageCard!=null)for(int card=0;card<2;card++)
+                {
+                    float yaw=angle*Mathf.Rad2Deg+card*78+(float)random.NextDouble()*28;
+                    Vector3 offset=new((float)random.NextDouble()*.5f-.25f,(float)random.NextDouble()*.55f,.0f);
+                    VisualFactory.FoliageCard("Grove / photoreal leaf cluster",sceneRoot,crown+offset,
+                        new Vector2(3.4f+reach*.45f,2.55f+reach*.3f),Quaternion.Euler((float)random.NextDouble()*12-6,yaw,0),foliageCard);
+                }
+                else Shape("Grove / leafy crown",PrimitiveType.Sphere,sceneRoot,crown,new Vector3(1.8f,1.35f,1.9f),j%3==0?light:leaf);
             }
+            if(foliageCard!=null)VisualFactory.FoliageCard("Grove / crown",sceneRoot,p+Vector3.up*(height+1.1f),
+                new Vector2(3.8f,3.1f),Quaternion.Euler(0,(float)random.NextDouble()*180,0),foliageCard);
         }
 
         void BuildFungus(Vector3 p, System.Random random, Material stem, Material cap, Material light)
@@ -1023,6 +1057,25 @@ namespace OrbitDominion
             road.transform.localRotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
         }
 
+        void BuildSurfaceReflection()
+        {
+            if(Application.isBatchMode)return;
+            var root=new GameObject("Surface environment reflection");root.transform.SetParent(sceneRoot,false);root.transform.localPosition=new Vector3(0,24,0);
+            var probe=root.AddComponent<ReflectionProbe>();probe.mode=UnityEngine.Rendering.ReflectionProbeMode.Realtime;
+            probe.refreshMode=UnityEngine.Rendering.ReflectionProbeRefreshMode.ViaScripting;
+            probe.timeSlicingMode=UnityEngine.Rendering.ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
+            // Include the 875 m sky dome as well as terrain in all cubemap faces.
+            probe.size=Vector3.one*310;probe.nearClipPlane=.3f;probe.farClipPlane=1000;probe.resolution=128;
+            probe.clearFlags=UnityEngine.Rendering.ReflectionProbeClearFlags.SolidColor;probe.backgroundColor=SkyColor();
+            probe.hdr=true;probe.intensity=1.05f;probe.boxProjection=false;StartCoroutine(CaptureReflection(probe));
+        }
+        System.Collections.IEnumerator CaptureReflection(ReflectionProbe probe)
+        {
+            // Let the local daylight and camera settle before the one-shot capture.
+            yield return new WaitForSeconds(.3f);
+            if(probe!=null)probe.RenderProbe();
+        }
+
         void BuildLander(Material hull, Material accent, Material glow)
         {
             Vector3 p = new(0, Ground(0, -28) + (Biome == SurfaceBiome.Ocean ? 1.8f : 2.8f), -28);
@@ -1042,12 +1095,12 @@ namespace OrbitDominion
 
         void BuildRover()
         {
-            var hull = Make(new Color(.65f, .7f, .66f), .28f);
-            var frame = Make(new Color(.16f, .24f, .27f), .65f);
-            var tire = Make(new Color(.045f, .055f, .062f));
+            var hull = MakeTextured("PbrConstruction",new Color(.82f,.86f,.83f),.34f,.54f);
+            var frame = MakeTextured("PbrConstruction",new Color(.25f,.31f,.34f),.68f,.66f);
+            var tire = MakeTextured("PbrRoad",new Color(.25f,.27f,.28f),0,.12f);
             var solar = Make(new Color(.035f, .2f, .34f), .55f);
             var glass = Make(new Color(.1f, .36f, .44f), .45f);
-            var ochre = Make(new Color(.8f, .37f, .12f), .25f);
+            var ochre = MakeTextured("PbrConstruction",new Color(.93f,.42f,.13f),.25f,.46f);
             var beacon = Make(new Color(.45f, .85f, .96f), .15f, new Color(.15f, 1.1f, 1.4f));
 
             Shape("Rover / armored undercarriage", PrimitiveType.Cube, explorer, new Vector3(0, 1.19f, 0), new Vector3(2.65f, .38f, 4.25f), frame);
@@ -1077,6 +1130,13 @@ namespace OrbitDominion
                     wheels[index] = wheel.transform;
                     Shape("Wheel hub", PrimitiveType.Cylinder, wheel.transform, Vector3.zero,
                         new Vector3(.48f, 1.08f, .48f), ochre);
+                    for(int tread=0;tread<10;tread++)
+                    {
+                        float angle=tread*Mathf.PI*2/10;
+                        var block=Shape("Rover wheel / tread",PrimitiveType.Cube,wheel.transform,
+                            new Vector3(Mathf.Cos(angle)*.54f,0,Mathf.Sin(angle)*.54f),new Vector3(.22f,.38f,.12f),tire);
+                        block.transform.localRotation=Quaternion.Euler(0,-angle*Mathf.Rad2Deg,0);
+                    }
                     RoverStrut("Rover / rocker arm", new Vector3(side * 1.05f, 1.24f, z * .65f),
                         new Vector3(side * 1.62f, .7f, z), .16f, frame);
                 }
@@ -1124,6 +1184,9 @@ namespace OrbitDominion
                 RenderSettings.fogMode = previousFogMode;
                 RenderSettings.fogColor = previousFogColor;
                 RenderSettings.fogDensity = previousFogDensity;
+                RenderSettings.ambientMode=previousAmbientMode;RenderSettings.ambientSkyColor=previousAmbientSky;
+                RenderSettings.ambientEquatorColor=previousAmbientEquator;RenderSettings.ambientGroundColor=previousAmbientGround;
+                RenderSettings.ambientIntensity=previousAmbientIntensity;
             }
         }
     }

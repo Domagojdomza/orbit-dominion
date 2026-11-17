@@ -15,9 +15,9 @@ namespace OrbitDominion
         public void Initialize(PrototypeBootstrap world,PlanetView planet)
         {
             this.world=world;this.planet=planet;
-            metal=VisualFactory.Lit(new Color(.14f,.24f,.29f),.7f);
+            metal=VisualFactory.TexturedLit("PbrConstruction",new Color(.36f,.5f,.56f),.7f,.62f);
             light=VisualFactory.Lit(new Color(.1f,.65f,.65f),.4f,new Color(.15f,1.2f,1.3f));
-            solar=VisualFactory.Lit(new Color(.04f,.12f,.35f),.65f);
+            solar=VisualFactory.TexturedLit("PbrConstruction",new Color(.08f,.24f,.58f),.65f,.74f);
         }
         void LateUpdate()
         {

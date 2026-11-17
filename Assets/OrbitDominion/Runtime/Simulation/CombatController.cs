@@ -62,7 +62,7 @@ namespace OrbitDominion
         {
             this.world=world;settings=world.combatSettings;
             effects=gameObject.AddComponent<CombatEffects>();effects.Initialize();
-            metal=VisualFactory.Lit(new Color(.25f,.08f,.08f),.75f);red=VisualFactory.Lit(new Color(.8f,.08f,.02f),.4f,new Color(2,.12f,.01f));
+            metal=VisualFactory.TexturedLit("PbrConstruction",new Color(.48f,.16f,.14f),.75f,.61f);red=VisualFactory.Lit(new Color(.8f,.08f,.02f),.4f,new Color(2,.12f,.01f));
             Player=world.Player.gameObject.AddComponent<CombatActor>();Player.Initialize("wayfarer",CombatFaction.Union,CombatRole.Player,new VitalState(settings.playerHull,settings.playerShield),7);actors.Add(Player);
             OutpostPosition=world.Worlds[2].transform.position+new Vector3(700,120,-720);
             SpawnHostile("Corsair command",CombatRole.Command,OutpostPosition);

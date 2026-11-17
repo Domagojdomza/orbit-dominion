@@ -43,7 +43,7 @@ namespace OrbitDominion
                 var orbit=new GameObject("Moon orbit").transform;orbit.SetParent(transform,false);
                 orbit.localRotation=Quaternion.Euler(12,0,8);
                 orbit.gameObject.AddComponent<OrbitMotion>().degreesPerSecond=OrbitalRules.MoonDegreesPerSecond(d.radius);
-                moonMaterial=VisualFactory.Lit(new Color(.35f,.37f,.4f),.85f);
+                moonMaterial=VisualFactory.TexturedLit("PbrTerrain",new Color(.62f,.65f,.68f),.18f,.2f);
                 var moon=VisualFactory.Shape("Moon",PrimitiveType.Sphere,orbit,new Vector3(d.radius*2.7f,0,0),Vector3.one*d.radius*.35f,moonMaterial);
                 moon.AddComponent<SphereCollider>().radius=.5f;
             }
@@ -51,7 +51,7 @@ namespace OrbitDominion
         void Civilization(int seed)
         {
             var random = new System.Random(seed);
-            var metal = VisualFactory.Lit(new Color(.13f,.2f,.25f), .7f);
+            var metal = VisualFactory.TexturedLit("PbrConstruction",new Color(.34f,.46f,.52f),.7f,.62f);
             var window = VisualFactory.Lit(new Color(.2f,.65f,.8f), .2f, new Color(.2f,.8f,1.1f));
             var cities = new GameObject("Surface civilization").transform; cities.SetParent(transform, false);
             for (int i = 0; i < 90; i++)
