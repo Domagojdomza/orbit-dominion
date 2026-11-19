@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 namespace OrbitDominion
 {
     [DefaultExecutionOrder(60)]
-    public sealed class SurfaceExpedition : MonoBehaviour
+    public sealed partial class SurfaceExpedition : MonoBehaviour
     {
         static readonly Vector3 SurfaceOrigin = new(0, -80000, 0);
         readonly HashSet<string> collected = new();
@@ -51,7 +51,8 @@ namespace OrbitDominion
         public Vector3 ExplorerLocal => explorerLocal;
         public float RoverSpeed => rover.speed;
         public float RoverHeading => rover.heading;
-        public bool RoverAfloat => Active && Terrain(explorerLocal.x, explorerLocal.z) < SurfaceRules.WaterLevel(Biome) + .3f;
+        float ExplorerHeading => OnFoot ? walk.heading : rover.heading;
+        public bool RoverAfloat => Active && Terrain(ParkedRoverLocal.x, ParkedRoverLocal.z) < SurfaceRules.WaterLevel(Biome) + .3f;
         public int RelicsFound => collected.Count;
         public bool BuildMode => buildMode;
         public SurfaceBuildKind SelectedBuild => selectedBuild;
@@ -103,12 +104,12 @@ namespace OrbitDominion
             var candidate = NearbyScannedPlanet();
             if (candidate == null) return false;
             if (world.Empire.State.Get(candidate.Definition.id).faction == 3 && world.Combat.LocalDefenders(candidate.Definition.id, CombatFaction.Union)) return false;
-            Enter(candidate);
+            Enter(candidate, true);
             world.Session?.SaveNow();
             return true;
         }
 
-        public void Enter(PlanetView destination)
+        public void Enter(PlanetView destination, bool startOnFoot = false)
         {
             if (Active || destination == null) return;
             planet = destination;
@@ -139,6 +140,7 @@ namespace OrbitDominion
             explorer = new GameObject("Wayfarer rover").transform;
             explorer.SetParent(sceneRoot, false);
             BuildRover();
+            BuildAstronaut();
             lens.clearFlags = CameraClearFlags.SolidColor;
             lens.backgroundColor = SkyColor();
             lens.farClipPlane = 950;
@@ -165,6 +167,7 @@ namespace OrbitDominion
             BuildSurfaceReflection();
             Message = "ROVER DEPLOYED / " + destination.Definition.title + " · Drive and recover hidden relics";
             UpdateCamera(true);
+            if (startOnFoot) ArriveOnFoot();
         }
 
         public void Launch(bool persist = true)
@@ -173,7 +176,8 @@ namespace OrbitDominion
             string name = planet.Definition.title;
             planet = null;
             if (sceneRoot != null) Destroy(sceneRoot.gameObject);
-            sceneRoot = null; explorer = null;
+            sceneRoot = null; explorer = null; astronaut = null;
+            OnFoot = false; walkObstacles.Clear(); cameraHull.Clear(); walk = new WalkMotion(Vector3.zero, 0);
             buildCursor = null; buildVisuals.Clear(); rallyGates.Clear(); scenery.Clear(); rallyRoute = null;
             buildMode = false; rallyActive = false; rallyElapsed = 0; rallyCheckpoint = 0;
             rover = new RoverMotion(0, 0);
@@ -202,8 +206,11 @@ namespace OrbitDominion
         {
             activePlanet = PlanetId,
             explorerPosition = Active ? explorerLocal : Vector3.zero,
-            yaw = Active ? rover.heading : 0,
+            yaw = Active ? ExplorerHeading : 0,
             pitch = Active ? pitch : 0,
+            onFoot = Active && OnFoot,
+            parkedRoverPosition = Active && OnFoot ? parkedRover : Vector3.zero,
+            parkedRoverYaw = Active && OnFoot ? parkedHeading : 0,
             collected = new List<string>(collected),
             sandbox = sandbox.Snapshot()
         };
@@ -218,6 +225,13 @@ namespace OrbitDominion
             if (string.IsNullOrEmpty(save.activePlanet)) return;
             var destination = world.Sector.Planet(save.activePlanet);
             Enter(destination);
+            if (save.onFoot && Active)
+            {
+                SetExplorerPose(save.parkedRoverPosition, save.parkedRoverYaw, save.pitch);
+                parkedRover = explorerLocal; parkedHeading = rover.heading;
+                BeginWalking(save.explorerPosition, save.yaw);
+                Message = "EXPEDITION RESTORED / On foot · Your rover is parked nearby";
+            }
             SetExplorerPose(save.explorerPosition, save.yaw, save.pitch);
         }
 
@@ -226,8 +240,10 @@ namespace OrbitDominion
             if (!Active) return;
             float x = Mathf.Clamp(position.x, -SurfaceRules.HalfWidth + 3, SurfaceRules.HalfWidth - 3);
             float z = Mathf.Clamp(position.z, -SurfaceRules.HalfWidth + 3, SurfaceRules.HalfWidth - 3);
-            explorerLocal = new Vector3(x, DriveGround(x, z), z);
-            rover = new RoverMotion(heading, 0); cameraYawOffset = 0;
+            explorerLocal = new Vector3(x, OnFoot ? FootFloor(x, z) : DriveGround(x, z), z);
+            if (OnFoot) { walk = new WalkMotion(Vector3.zero, heading); walkCameraYaw = heading; }
+            else rover = new RoverMotion(heading, 0);
+            cameraYawOffset = 0;
             pitch = Mathf.Clamp(tilt, -45, 65);
             UpdateCamera(true);
         }
@@ -300,7 +316,7 @@ namespace OrbitDominion
                     if (distance < best) { best = distance; chosen = relicPositions[i]; }
                 }
                 float angle = Mathf.Atan2(chosen.x - explorerLocal.x, chosen.y - explorerLocal.z) * Mathf.Rad2Deg;
-                float turn = Mathf.DeltaAngle(rover.heading, angle);
+                float turn = Mathf.DeltaAngle(ExplorerHeading, angle);
                 return turn < -20 ? "LEFT" : turn > 20 ? "RIGHT" : "AHEAD";
             }
         }
@@ -321,12 +337,12 @@ namespace OrbitDominion
             buildMode = !buildMode;
             if (buildCursor != null) buildCursor.SetActive(buildMode);
             if (buildMode) { rover = new RoverMotion(rover.heading, 0); Message = "PLANET BUILDER ONLINE / Grid construction linked to empire resources"; UpdateBuildCursor(); }
-            else Message = "PLANET BUILDER CLOSED / Rover controls restored";
+            else Message = "PLANET BUILDER CLOSED / Exploration controls restored";
         }
 
         Vector3 BuildTarget()
         {
-            Vector3 forward = Quaternion.Euler(0, rover.heading, 0) * Vector3.forward;
+            Vector3 forward = Quaternion.Euler(0, ExplorerHeading, 0) * Vector3.forward;
             Vector3 raw = explorerLocal + forward * 9;
             float x = Mathf.Round(raw.x / SurfaceSandboxRules.Grid) * SurfaceSandboxRules.Grid;
             float z = Mathf.Round(raw.z / SurfaceSandboxRules.Grid) * SurfaceSandboxRules.Grid;
@@ -335,11 +351,17 @@ namespace OrbitDominion
 
         public bool TryPlaceBuild(SurfaceBuildKind kind, Vector3 rawPosition, int rotation, int layer = 0)
         {
-            if (!Active || !world.Empire.State.Get(PlanetId).owned) return false;
+            if (!Active || world.Player.Paused || !world.Empire.State.Get(PlanetId).owned) return false;
             float x = Mathf.Round(rawPosition.x / SurfaceSandboxRules.Grid) * SurfaceSandboxRules.Grid;
             float z = Mathf.Round(rawPosition.z / SurfaceSandboxRules.Grid) * SurfaceSandboxRules.Grid;
             Vector3 position = SurfaceSandboxRules.Snap(new Vector3(x, 0, z), Ground(x, z), layer);
             rotation = (rotation % 4 + 4) % 4;
+            Vector2 footprint = SurfaceSandboxRules.Footprint(kind, rotation);
+            if (Mathf.Abs(x) < 10 + footprint.x * .5f && Mathf.Abs(z + 28) < 11 + footprint.y * .5f)
+            { Message = "LANDING ZONE / Keep the ship airlock and rover access clear"; return false; }
+            if (SurfaceWalkRules.InsideBox(explorerLocal + Vector3.up, position + Vector3.up * 2,
+                new Vector3(footprint.x, 4, footprint.y), 0, 1))
+            { Message = "PLANET BUILDER / Move clear of this module's footprint"; return false; }
             if (!sandbox.CanPlace(PlanetId, kind, position, rotation)) { Message = "PLANET BUILDER / Footprint occupied or outside build region"; return false; }
             Vector2 cost = SurfaceSandboxRules.Cost(kind);
             if (!world.Empire.State.Spend(cost.x, cost.y)) { Message = $"PLANET BUILDER / Need {cost.x:0} minerals and {cost.y:0} energy"; return false; }
@@ -416,7 +438,8 @@ namespace OrbitDominion
 
         public bool StartRally()
         {
-            if (!Active || rallyRoute == null) return false;
+            if (!Active || rallyRoute == null || world.Player.Paused) return false;
+            if (OnFoot) { Message = "ROVER RALLY / Board your rover to race"; return false; }
             float range = Vector2.Distance(new Vector2(explorerLocal.x, explorerLocal.z), rallyRoute[0]);
             if (range > 10) { Message = $"ROVER RALLY / Reach the cyan start gate ({range:0} m)"; return false; }
             if (buildMode) ToggleBuildMode();
@@ -451,11 +474,17 @@ namespace OrbitDominion
             if (keys == null) return;
             if (keys.lKey.wasPressedThisFrame) { Launch(); return; }
             if (keys.bKey.wasPressedThisFrame) ToggleBuildMode();
+            if (!buildMode && keys.eKey.wasPressedThisFrame) { TryInteract(); if (!Active) return; }
             if (keys.tKey.wasPressedThisFrame) StartRally();
             if (keys.fKey.wasPressedThisFrame) TryCollect();
             if (keys.iKey.wasPressedThisFrame) { pingRemaining = 8; Message = NearestRelicDistance < 0 ? "NO REMAINING SIGNALS" : $"PULSE RETURN / Nearest relic {NearestRelicDistance:0} m"; }
             pingRemaining = Mathf.Max(0, pingRemaining - Time.deltaTime);
             Vector2 look = Mouse.current != null ? Mouse.current.delta.ReadValue() : Vector2.zero;
+            if (OnFoot)
+            {
+                pitch = Mathf.Clamp(pitch - look.y * .14f, -25, 55);
+                UpdateWalking(keys, look); return;
+            }
             cameraYawOffset = Mathf.Clamp(cameraYawOffset + look.x * .11f, -80, 80);
             if (Mathf.Abs(look.x) < .01f) cameraYawOffset = Mathf.MoveTowards(cameraYawOffset, 0, 22 * Time.deltaTime);
             pitch = Mathf.Clamp(pitch - look.y * .11f + (keys.downArrowKey.isPressed ? 80 * Time.deltaTime : 0) - (keys.upArrowKey.isPressed ? 80 * Time.deltaTime : 0), -45, 65);
@@ -482,6 +511,7 @@ namespace OrbitDominion
         void UpdateCamera(bool immediate)
         {
             if (!Active || explorer == null) return;
+            if (OnFoot) { UpdateWalkingCamera(immediate); return; }
             explorer.localPosition = explorerLocal;
             Vector3 forward = Quaternion.Euler(0, rover.heading, 0) * Vector3.forward;
             Vector3 right = Quaternion.Euler(0, rover.heading, 0) * Vector3.right;
@@ -558,13 +588,13 @@ namespace OrbitDominion
                     reef.transform.rotation = Quaternion.Euler(0, i * 57, 0);
                 }
                 BuildLandmarks(random, dark, accent, glow);
-                Shape("Floating landing raft", PrimitiveType.Cube, sceneRoot, new Vector3(0, Ground(0, -28), -28), new Vector3(13, .45f, 14), dark);
             }
             else
             {
                 for (int i = 0; i < 75; i++)
                 {
                     Vector3 p = Scatter(random, 18, 143); p.y = Ground(p.x, p.z);
+                    if (Mathf.Abs(p.x) < 12 && Mathf.Abs(p.z + 28) < 13) continue;
                     if (Terrain(p.x, p.z) < SurfaceRules.WaterLevel(biome) + .4f) continue;
                     bool nearRelic = false;
                     foreach (var relic in relicPositions) if (Vector2.Distance(new Vector2(p.x, p.z), relic) < 8) nearRelic = true;
@@ -946,6 +976,7 @@ namespace OrbitDominion
             var hub = new GameObject("Civilization / community hub").transform;
             hub.SetParent(sceneRoot, false); hub.localPosition = center + Vector3.up * .55f;
             SurfaceArchitecture.Build(SurfaceBuildKind.Habitat, hub, accent, structure, glazing, concrete, concrete, accent, light);
+            walkObstacles.Add((hub, new Vector3(6, 4.2f, 6), Vector3.up * 2.1f));
             for (int i = 0; i < 9; i++)
             {
                 float a = i * Mathf.PI * 2 / 9;
@@ -956,6 +987,7 @@ namespace OrbitDominion
                 habitat.SetParent(sceneRoot, false); habitat.localPosition = p;
                 habitat.localRotation = Quaternion.LookRotation(new Vector3(center.x - p.x, 0, center.z - p.z));
                 SurfaceArchitecture.Build(SurfaceBuildKind.Habitat, habitat, accent, structure, glazing, concrete, concrete, accent, light);
+                walkObstacles.Add((habitat, new Vector3(6, 4.2f, 6), Vector3.up * 2.1f));
                 Vector3 lamp = Vector3.Lerp(center, p, .63f); lamp.y = Ground(lamp.x, lamp.z);
                 BuildBeam("Civilization / street light mast", sceneRoot, lamp + Vector3.up * .15f, lamp + Vector3.up * 2.6f, .07f, structure);
                 Shape("Civilization / street light", PrimitiveType.Sphere, sceneRoot, lamp + Vector3.up * 2.7f, Vector3.one * .15f, light);
@@ -1001,12 +1033,25 @@ namespace OrbitDominion
 
         void BuildLander(Material hull, Material accent, Material glow)
         {
+            Shape(Biome == SurfaceBiome.Ocean ? "Floating landing raft" : "Ship landing apron", PrimitiveType.Cube,
+                sceneRoot, new Vector3(0, Ground(0, -28), -28), new Vector3(13, .45f, 14), hull);
             Vector3 p = new(0, Ground(0, -28) + (Biome == SurfaceBiome.Ocean ? 1.8f : 2.8f), -28);
             var lander = new GameObject("Wayfarer landing craft").transform;
             lander.SetParent(sceneRoot, false); lander.localPosition = p;
             VisualFactory.Ship(lander, hull, accent, 2.1f);
+            walkObstacles.Add((lander, new Vector3(4, 3, 12), new Vector3(0, -.4f, -1)));
+            float deck = Ground(0, -28) + .225f;
+            Shape("Ship / airlock frame", PrimitiveType.Cube, sceneRoot, new Vector3(2.6f, deck + 1.15f, -28), new Vector3(.25f, 2.3f, 1.6f), hull);
+            Shape("Ship / airlock threshold", PrimitiveType.Cube, sceneRoot, new Vector3(3.5f, deck + .06f, -28), new Vector3(2, .12f, 1.8f), accent);
+            Shape("Ship / airlock light", PrimitiveType.Cube, sceneRoot, new Vector3(2.8f, deck + 2.2f, -28), new Vector3(.12f, .1f, 1.4f), glow);
             for (int side = -1; side <= 1; side += 2)
                 Shape("Landing thruster", PrimitiveType.Cylinder, lander, new Vector3(side * 5, -2.2f, -3), new Vector3(.6f, 2, .6f), glow);
+            foreach (var filter in lander.GetComponentsInChildren<MeshFilter>())
+            {
+                var collider = filter.gameObject.AddComponent<MeshCollider>(); collider.sharedMesh = filter.sharedMesh;
+                cameraHull.Add(collider);
+            }
+            Physics.SyncTransforms();
         }
 
 

@@ -41,16 +41,19 @@ namespace OrbitDominion
                 panel.style.display = active ? DisplayStyle.Flex : DisplayStyle.None;
             }
             if (!active) return;
-            title.text = world.Surface.PlanetName + " / ROVER EXPEDITION";
+            bool onFoot = world.Surface.OnFoot;
+            title.text = world.Surface.PlanetName + (onFoot ? " / ON FOOT" : " / ROVER EXPEDITION");
             biome.text = world.Surface.Biome.ToString().ToUpperInvariant() + " BIOME  ·  " +
-                (world.Surface.RoverAfloat ? "AMPHIBIOUS ROVER" : "SIX-WHEEL ROVER") +
-                $"  ·  {Mathf.Abs(world.Surface.RoverSpeed) * 3.6f:0} KM/H";
-            signal.text = world.Surface.ActivityHint + "\n" + world.Surface.SignalHint;
+                (onFoot ? "WAYFARER EXPLORER" : world.Surface.RoverAfloat ? "AMPHIBIOUS ROVER" : "SIX-WHEEL ROVER") +
+                $"  ·  {(onFoot ? world.Surface.WalkingSpeed : Mathf.Abs(world.Surface.RoverSpeed)) * 3.6f:0} KM/H";
+            signal.text = world.Surface.InteractionHint + "\n" + world.Surface.SignalHint;
+            if (!onFoot) signal.text += "\n" + world.Surface.ActivityHint;
             total.text = $"RELICS {world.Surface.RelicsFound}  ·  BUILT MODULES {world.Surface.LocalBuildCount}";
             message.text = world.Player.Paused ? "EXPEDITION PAUSED / ESC to resume" : world.Surface.Message;
             controls.text = world.Player.Paused ? "ESC / RESUME EXPEDITION" :
                 world.Surface.BuildMode ? world.Surface.BuildHint :
-                "W/S DRIVE · A/D STEER · SHIFT BOOST · B BUILD · T RALLY · I SCAN · F RECOVER · F5 SAVE · L LAUNCH · ESC PAUSE";
+                onFoot ? "WASD WALK · SHIFT RUN · MOUSE LOOK · E BOARD · B BUILD · I SCAN · F RECOVER · F5 SAVE · L RECALL · ESC PAUSE" :
+                "W/S DRIVE · A/D STEER · SHIFT BOOST · E EXIT · B BUILD · T RALLY · I SCAN · F RECOVER · F5 SAVE · L LAUNCH · ESC PAUSE";
         }
     }
 }

@@ -12,6 +12,10 @@ namespace OrbitDominion
         public string activePlanet;
         public Vector3 explorerPosition;
         public float yaw, pitch;
+        // Optional additions: archives without these fields resume in the rover.
+        public bool onFoot;
+        public Vector3 parkedRoverPosition;
+        public float parkedRoverYaw;
         public List<string> collected = new();
         public SurfaceSandboxSave sandbox;
     }
@@ -101,6 +105,9 @@ namespace OrbitDominion
         public static bool ValidSave(SurfaceSave save, IList<WorldDefinition> worlds)
         {
             if (save == null) return true; // Saves made before landing existed remain readable.
+            if (save.onFoot && (string.IsNullOrEmpty(save.activePlanet) || !GameArchive.ValidVector(save.parkedRoverPosition) ||
+                Mathf.Abs(save.parkedRoverPosition.x) > HalfWidth || Mathf.Abs(save.parkedRoverPosition.z) > HalfWidth ||
+                Mathf.Abs(save.parkedRoverPosition.y) > 100 || !Finite(save.parkedRoverYaw))) return false;
             if (save.collected == null || save.collected.Count > worlds.Count * RelicsPerPlanet || !Finite(save.yaw) || !Finite(save.pitch) || Mathf.Abs(save.pitch) > 70 ||
                 !GameArchive.ValidVector(save.explorerPosition) || Mathf.Abs(save.explorerPosition.x) > HalfWidth || Mathf.Abs(save.explorerPosition.z) > HalfWidth || Mathf.Abs(save.explorerPosition.y) > 100) return false;
             if (!string.IsNullOrEmpty(save.activePlanet))

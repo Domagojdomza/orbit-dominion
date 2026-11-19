@@ -7,6 +7,34 @@ namespace OrbitDominion.Tests
     public sealed class SurfaceTests
     {
         [Test]
+        public void WalkingUsesCameraDirectionNormalizesDiagonalAndStopsWhenPaused()
+        {
+            var start = new WalkMotion(Vector3.zero, 0);
+            var forward = SurfaceWalkRules.Step(start, Vector2.up, 90, false, 1);
+            Assert.AreEqual(SurfaceWalkRules.WalkSpeed, forward.velocity.x, .001f);
+            Assert.AreEqual(0, forward.velocity.z, .001f);
+            var diagonal = SurfaceWalkRules.Step(start, Vector2.one, 0, true, 1);
+            Assert.AreEqual(SurfaceWalkRules.RunSpeed, diagonal.velocity.magnitude, .001f);
+            var paused = SurfaceWalkRules.Step(diagonal, Vector2.down, 180, false, 0);
+            Assert.AreEqual(diagonal.velocity, paused.velocity);
+            Assert.AreEqual(Vector3.zero, SurfaceWalkRules.Step(diagonal, Vector2.zero, 0, false, 1).velocity);
+            Assert.IsFalse(SurfaceWalkRules.CanStep(0, 4, .15f), "No teleporting onto elevated floors");
+        }
+
+        [Test]
+        public void FootArchiveIsOptionalAndRejectsInvalidParkedRoverPoses()
+        {
+            var worlds = new List<WorldDefinition> { new("solace-01", "MERIDIAN", Vector3.zero, 310, Color.blue, Color.green, Color.gray, Color.cyan, .5f, .5f) };
+            var legacy = JsonUtility.FromJson<SurfaceSave>("{\"activePlanet\":\"solace-01\",\"explorerPosition\":{\"x\":4,\"y\":3,\"z\":12},\"collected\":[]}");
+            Assert.IsFalse(legacy.onFoot); Assert.IsTrue(SurfaceRules.ValidSave(legacy, worlds));
+            legacy.onFoot = true; legacy.parkedRoverPosition = new Vector3(8, 3, -24);
+            Assert.IsTrue(SurfaceRules.ValidSave(legacy, worlds));
+            legacy.parkedRoverYaw = float.NaN; Assert.IsFalse(SurfaceRules.ValidSave(legacy, worlds));
+            legacy.parkedRoverYaw = 0; legacy.parkedRoverPosition = new Vector3(1000, 0, 0);
+            Assert.IsFalse(SurfaceRules.ValidSave(legacy, worlds));
+        }
+
+        [Test]
         public void RelicsHaveStableSeparatedLocationsPerPlanet()
         {
             var first = SurfaceRules.RelicPositions("solace-01", 42);

@@ -41,6 +41,84 @@ namespace OrbitDominion.Tests
         IEnumerator Load() { yield return SceneManager.LoadSceneAsync("Solace"); yield return null; yield return null; yield return null; }
 
         [UnityTest]
+        public IEnumerator WalkingParkingPauseArchiveAndShipBoardingUseRealInput()
+        {
+            yield return Load();
+            var world = Object.FindAnyObjectByType<PrototypeBootstrap>();
+            var surface = world.Surface; surface.Enter(world.Worlds[0], true);
+            yield return null;
+            Vector3 eye = Camera.main.transform.position;
+            Vector3 chest = GameObject.Find("Wayfarer astronaut").transform.position + Vector3.up * 1.5f;
+            foreach (var hull in GameObject.Find("Wayfarer landing craft").GetComponentsInChildren<MeshCollider>())
+                Assert.IsFalse(hull.Raycast(new Ray(eye, (chest - eye).normalized), out _, Vector3.Distance(eye, chest)),
+                    "Ship wings must not obscure the person immediately after landing");
+            Vector3 start = surface.ExplorerLocal, parked = surface.ParkedRoverLocal;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.LeftShift));
+            yield return new WaitForSeconds(.35f);
+            Assert.IsTrue(surface.OnFoot);
+            Assert.Greater(Vector3.Distance(start, surface.ExplorerLocal), .4f);
+            Assert.AreEqual(parked, surface.ParkedRoverLocal, "Walking must leave the rover parked");
+            Assert.IsNotNull(GameObject.Find("Wayfarer astronaut"));
+            world.Player.SetPause(true); Vector3 paused = surface.ExplorerLocal;
+            yield return new WaitForSecondsRealtime(.1f);
+            Assert.AreEqual(paused, surface.ExplorerLocal); Assert.IsFalse(surface.TryInteract());
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); world.Player.SetPause(false);
+            yield return new WaitForSeconds(.2f);
+            var saved = JsonUtility.FromJson<GameSave>(JsonUtility.ToJson(world.Session.Snapshot()));
+            Assert.IsTrue(saved.surface.onFoot); Assert.IsTrue(world.Session.Validate(saved));
+            Assert.IsTrue(world.Session.Restore(saved));
+            Assert.IsTrue(surface.OnFoot); Assert.AreEqual(parked, surface.ParkedRoverLocal);
+            Assert.Less(Vector3.Distance(saved.surface.explorerPosition, surface.ExplorerLocal), .01f);
+            surface.SetExplorerPose(parked + Vector3.left * 3.7f, 0, 12);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.E)); yield return null; yield return null;
+            Assert.IsFalse(surface.OnFoot);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W)); yield return new WaitForSeconds(.25f);
+            Assert.Greater(surface.RoverSpeed, 1.2f); Assert.IsFalse(surface.TryInteract(), "Moving rover cannot eject the character");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return new WaitForSeconds(.5f);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.E)); yield return null; yield return null;
+            Assert.IsTrue(surface.OnFoot);
+            Assert.Less(surface.RoverSpeed, .01f); Assert.IsFalse(surface.StartRally());
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
+            surface.SetExplorerPose(surface.ShipEntrance, 270, 12);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.E)); yield return null; yield return null;
+            Assert.IsFalse(surface.Active); Assert.IsFalse(world.Player.FlightDisabled);
+            Assert.IsNull(GameObject.Find("Wayfarer astronaut"));
+        }
+
+        [UnityTest]
+        public IEnumerator WalkingAndFollowCameraRespectConstructedWalls()
+        {
+            yield return Load();
+            var world = Object.FindAnyObjectByType<PrototypeBootstrap>(); var surface = world.Surface;
+            surface.Enter(world.Worlds[0], true); surface.SetExplorerPose(Vector3.zero, 90, 12);
+            Assert.IsTrue(surface.TryPlaceBuild(SurfaceBuildKind.Wall, new Vector3(4, 0, 0), 1));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W)); yield return new WaitForSeconds(1.4f);
+            Assert.Greater(surface.ExplorerLocal.x, 1); Assert.Less(surface.ExplorerLocal.x, 3.4f);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
+            surface.SetExplorerPose(new Vector3(7, 0, 0), 90, 0);
+            var root = GameObject.Find("Wayfarer astronaut").transform.parent;
+            Assert.Greater(root.InverseTransformPoint(Camera.main.transform.position).x, 4.5f,
+                "The follow camera must pull in before crossing the wall");
+        }
+
+        [UnityTest]
+        public IEnumerator OceanAllowsWalkingOnDeckButRejectsOpenWaterExit()
+        {
+            yield return Load();
+            var world = Object.FindAnyObjectByType<PrototypeBootstrap>(); var surface = world.Surface;
+            surface.Enter(world.Sector.Planet("veil-02"));
+            Assert.IsFalse(surface.TryInteract()); Assert.IsFalse(surface.OnFoot);
+            surface.SetExplorerPose(new Vector3(8, 0, -24), 0, 12);
+            Assert.IsTrue(surface.TryInteract()); Assert.IsTrue(surface.OnFoot);
+            float initialY = surface.ExplorerLocal.y;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.LeftShift));
+            yield return new WaitForSeconds(1);
+            Assert.Less(surface.ExplorerLocal.z, -21.3f);
+            Assert.AreEqual(initialY, surface.ExplorerLocal.y, .01f);
+            Assert.Greater(surface.ExplorerLocal.y, SurfaceRules.WaterLevel(SurfaceBiome.Ocean));
+        }
+
+        [UnityTest]
         public IEnumerator DetailedBuildingMeshesRespectSavedFootprintsAndReleaseOnDestruction()
         {
             var material = VisualFactory.Lit(Color.gray);
@@ -126,6 +204,10 @@ namespace OrbitDominion.Tests
             float parkedShield = world.Combat.Player.Vitals.Shield;
             world.Combat.ApplyDamage(world.Combat.Player, 100, CombatFaction.Hostile);
             Assert.AreEqual(parkedShield, world.Combat.Player.Vitals.Shield);
+            Assert.IsTrue(world.Surface.OnFoot, "Landing disembarks the astronaut at the ship");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.E));
+            yield return null; yield return null;
+            Assert.IsFalse(world.Surface.OnFoot, "The parked rover must be reachable from the airlock");
             Vector3 before = world.Surface.ExplorerLocal;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W));
             yield return null; yield return null;

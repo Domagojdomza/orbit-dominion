@@ -70,7 +70,8 @@ namespace OrbitDominion
             bool surfaceCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-surfaceCapture")>=0;
             bool systemCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-systemCapture")>=0;
             bool sandboxCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-sandboxCapture")>=0;
-            bool capture=surfaceCapture||sectorCapture||combatCapture||systemCapture||sandboxCapture||System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-orbitCapture")>=0;
+            bool walkCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-walkCapture")>=0;
+            bool capture=walkCapture||surfaceCapture||sectorCapture||combatCapture||systemCapture||sandboxCapture||System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-orbitCapture")>=0;
             Discovery=gameObject.AddComponent<DiscoveryController>();
             Discovery.Initialize(Player,Worlds,discoverySettings,settings.galaxySeed,Beacon,null);
             var scanEffects=gameObject.AddComponent<ScanEffects>();scanEffects.Initialize(Discovery);
@@ -89,7 +90,58 @@ namespace OrbitDominion
             var beacon=VisualFactory.Shape("Navigation beacon",PrimitiveType.Sphere,transform,Beacon,Vector3.one*2,cyan);
             VisualFactory.Ring("Beacon orbit",beacon.transform,8,.16f,cyan);
             CreateAsteroids(metal);
-            if(capture) {gameObject.AddComponent<RuntimeMetrics>();Player.enabled=false;StartCoroutine(systemCapture?CaptureSystems():sandboxCapture?CaptureSandbox():surfaceCapture?CaptureSurface():sectorCapture?CaptureSector():combatCapture?CaptureCombat():Capture());}
+            if(capture) {gameObject.AddComponent<RuntimeMetrics>();Player.enabled=false;StartCoroutine(walkCapture?CaptureWalking():systemCapture?CaptureSystems():sandboxCapture?CaptureSandbox():surfaceCapture?CaptureSurface():sectorCapture?CaptureSector():combatCapture?CaptureCombat():Capture());}
+        }
+
+        IEnumerator CaptureWalking()
+        {
+            // Isolated QA: no player archive is opened, and injected input is scoped to this run.
+            bool previousBackground = Application.runInBackground;
+            var previousInput = InputSystem.settings.backgroundBehavior;
+            Application.runInBackground = true;
+            InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            try
+            {
+                yield return new WaitForSeconds(2);
+                Surface.Enter(Worlds[0], true);
+                yield return new WaitForSeconds(2);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath, "../walk-airlock.png"));
+                yield return new WaitForSeconds(1);
+                bool entered = Surface.TryInteract();
+                yield return new WaitForSeconds(1);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath, "../walk-rover.png"));
+                yield return new WaitForSeconds(1);
+                bool exited = Surface.TryInteract();
+                Surface.SetExplorerPose(new Vector3(0, 0, 4), 0, 12);
+                Vector3 before = Surface.ExplorerLocal;
+                InputSystem.QueueStateEvent(keyboard, new UnityEngine.InputSystem.LowLevel.KeyboardState(Key.W, Key.LeftShift));
+                yield return new WaitForSeconds(.8f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath, "../walk-exploration.png"));
+                yield return new WaitForSeconds(.3f);
+                InputSystem.QueueStateEvent(keyboard, new UnityEngine.InputSystem.LowLevel.KeyboardState());
+                yield return new WaitForSeconds(.4f);
+                float walked = Vector3.Distance(before, Surface.ExplorerLocal);
+                var archive = new GameArchive(System.IO.Path.Combine(Application.dataPath, "../qa-walking-v2.json"), Session.Validate);
+                archive.Save(Session.Snapshot()); var loaded = archive.Load(out _);
+                bool restored = Session.Validate(loaded) && Session.Restore(loaded) && Surface.OnFoot;
+                Surface.SetExplorerPose(Surface.ShipEntrance, 270, 12);
+                yield return new WaitForSeconds(1);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath, "../walk-boarding.png"));
+                yield return new WaitForSeconds(1);
+                bool boarded = Surface.TryInteract() && !Surface.Active;
+                Surface.Enter(Sector.Planet("veil-02"), true);
+                yield return new WaitForSeconds(2);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath, "../walk-ocean-deck.png"));
+                yield return new WaitForSeconds(1);
+                Debug.Log($"ORBIT_WALK_CAPTURE: enteredRover={entered}, exitedRover={exited}, walkedMetres={walked:0.00}, restoredOnFoot={restored}, boardedShip={boarded}, oceanOnFoot={Surface.OnFoot}");
+            }
+            finally
+            {
+                InputSystem.RemoveDevice(keyboard); InputSystem.settings.backgroundBehavior = previousInput;
+                Application.runInBackground = previousBackground;
+            }
+            Application.Quit();
         }
         IEnumerator CaptureSandbox()
         {
