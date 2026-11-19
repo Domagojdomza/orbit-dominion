@@ -110,6 +110,22 @@ namespace OrbitDominion
             yield return new WaitForSeconds(2);
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../sandbox-builder.png"));
             yield return new WaitForSeconds(1);Surface.ToggleBuildMode();
+            // Isolated art inspection; ordinary play retains the rover follow camera and HUD.
+            Surface.enabled=false;GetComponent<UIDocument>().enabled=false;
+            var camera=Camera.main;camera.fieldOfView=52;
+            var rover=GameObject.Find("Wayfarer rover").transform;
+            Vector3 roverView=rover.position+new Vector3(6.8f,4.3f,8.2f);
+            camera.transform.SetPositionAndRotation(roverView,Quaternion.LookRotation(rover.position+Vector3.up*1.8f-roverView));
+            yield return new WaitForSeconds(1);
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../model-rover-detail.png"));
+            yield return new WaitForSeconds(1);
+            Vector3 districtView=rover.parent.TransformPoint(new Vector3(23,16,8));
+            Vector3 districtTarget=rover.parent.TransformPoint(new Vector3(0,4,30));
+            camera.transform.SetPositionAndRotation(districtView,Quaternion.LookRotation(districtTarget-districtView));
+            yield return new WaitForSeconds(1);
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../model-settlement-detail.png"));
+            yield return new WaitForSeconds(1);
+            Surface.enabled=true;GetComponent<UIDocument>().enabled=true;
             var route=Surface.RallyRoute;Vector2 direction=(route[1]-route[0]).normalized;
             float heading=Mathf.Atan2(direction.x,direction.y)*Mathf.Rad2Deg;
             Vector2 staging=route[0]-direction*15;

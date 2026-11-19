@@ -41,6 +41,52 @@ namespace OrbitDominion.Tests
         IEnumerator Load() { yield return SceneManager.LoadSceneAsync("Solace"); yield return null; yield return null; yield return null; }
 
         [UnityTest]
+        public IEnumerator DetailedBuildingMeshesRespectSavedFootprintsAndReleaseOnDestruction()
+        {
+            var material = VisualFactory.Lit(Color.gray);
+            var roots = new System.Collections.Generic.List<GameObject>();
+            var meshes = new System.Collections.Generic.List<Mesh>();
+            try
+            {
+                foreach (SurfaceBuildKind kind in System.Enum.GetValues(typeof(SurfaceBuildKind)))
+                {
+                    var root = new GameObject("Envelope QA / " + kind); roots.Add(root);
+                    SurfaceArchitecture.Build(kind, root.transform, material, material, material, material, material, material, material);
+                    var filters = root.GetComponentsInChildren<MeshFilter>();
+                    Assert.AreEqual(1, filters.Length, "Static details should combine by material: " + kind);
+                    Vector2 footprint = SurfaceSandboxRules.Footprint(kind, 0);
+                    foreach (var filter in filters)
+                    {
+                        Mesh mesh = filter.sharedMesh; meshes.Add(mesh);
+                        Assert.LessOrEqual(mesh.bounds.max.x, footprint.x * .5f + .01f, kind.ToString());
+                        Assert.GreaterOrEqual(mesh.bounds.min.x, -footprint.x * .5f - .01f, kind.ToString());
+                        Assert.LessOrEqual(mesh.bounds.max.z, footprint.y * .5f + .01f, kind.ToString());
+                        Assert.GreaterOrEqual(mesh.bounds.min.z, -footprint.y * .5f - .01f, kind.ToString());
+                        Assert.LessOrEqual(mesh.bounds.max.y, SurfaceSandboxRules.StructureHeight(kind) + .05f, kind.ToString());
+                        Assert.AreEqual(mesh.vertexCount, mesh.uv.Length);
+                        Assert.AreEqual(mesh.vertexCount, mesh.tangents.Length);
+                        Vector3[] vertices = mesh.vertices, normals = mesh.normals; int[] indices = mesh.triangles;
+                        foreach (var t in mesh.tangents) Assert.IsTrue(float.IsFinite(t.x) && float.IsFinite(t.y) && float.IsFinite(t.z));
+                        for (int i = 0; i < indices.Length; i += 3)
+                        {
+                            int a = indices[i], b = indices[i + 1], c = indices[i + 2];
+                            Vector3 face = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
+                            Assert.Greater(face.sqrMagnitude, 1e-12f, "Degenerate face: " + kind);
+                            Assert.Greater(Vector3.Dot(face, normals[a] + normals[b] + normals[c]), 0, "Inverted face: " + kind);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                foreach (var root in roots) Object.Destroy(root);
+                Object.Destroy(material);
+            }
+            yield return null; yield return null;
+            foreach (var mesh in meshes) Assert.IsTrue(mesh == null, "Generated mesh leaked after model destruction");
+        }
+
+        [UnityTest]
         public IEnumerator LandingRoverDriveRelicAndReturnToOrbitUseRealInput()
         {
             yield return Load();
@@ -57,6 +103,16 @@ namespace OrbitDominion.Tests
             Assert.AreEqual("solace-01", world.Surface.PlanetId);
             Assert.IsNotNull(GameObject.Find("Wayfarer rover"));
             Assert.IsNotNull(GameObject.Find("Rover wheel / 0"));
+            var roverRoot = GameObject.Find("Wayfarer rover");
+            var roverMeshes = new System.Collections.Generic.List<Mesh>();
+            foreach (var owner in roverRoot.GetComponentsInChildren<OwnedMesh>()) roverMeshes.Add(owner.mesh);
+            Assert.Greater(roverMeshes.Count, 6);
+            for (int wheel = 0; wheel < 6; wheel++)
+            {
+                var wheelRoot = GameObject.Find("Rover wheel / " + wheel).transform;
+                Assert.AreEqual(Vector3.one, wheelRoot.localScale, "Articulated wheel dimensions must be baked into the mesh");
+                Assert.Greater(wheelRoot.GetComponentsInChildren<MeshFilter>().Length, 0);
+            }
             Assert.IsTrue(world.Player.FlightDisabled);
             Assert.IsFalse(Object.FindAnyObjectByType<ChaseCamera>().enabled);
             float parkedShield = world.Combat.Player.Vitals.Shield;
@@ -93,6 +149,8 @@ namespace OrbitDominion.Tests
             Assert.AreEqual(orbitEquator,RenderSettings.ambientEquatorColor);
             Assert.AreEqual(orbitGround,RenderSettings.ambientGroundColor);
             Assert.AreEqual(orbitAmbientIntensity,RenderSettings.ambientIntensity);
+            yield return null; yield return null;
+            foreach (var mesh in roverMeshes) Assert.IsTrue(mesh == null, "Rover mesh leaked after leaving the surface");
             Assert.IsTrue(world.Session.Restore(serialized));
             Assert.IsTrue(world.Surface.Active);
             Assert.AreEqual(prior + 1, world.Surface.RelicsFound);

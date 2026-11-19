@@ -520,12 +520,10 @@ namespace OrbitDominion
                 SurfaceBiome.Toxic => new Color(.23f, .28f, .1f),
                 _ => new Color(.2f, .32f, .23f)
             };
-            var ground = Make(soil);
-            var accent = Make(Color.Lerp(soil, biome == SurfaceBiome.Volcanic ? new Color(1, .13f, .035f) : new Color(.72f, .75f, .62f), .42f));
-            var dark = Make(Color.Lerp(soil, Color.black, .42f), .16f);
-            var bark = Make(new Color(.28f, .22f, .15f));
+            var accent = MakeTextured("PbrTerrain", Color.Lerp(soil, new Color(.72f, .75f, .62f), .42f), .02f, .2f);
+            var dark = MakeTextured("PbrTerrain", Color.Lerp(palette.stone, Color.black, .12f), .02f, .16f);
+            var bark = MakeTextured("PbrTerrain", new Color(.28f, .22f, .15f), 0, .15f);
             var foliage = Make(Color.Lerp(palette.lowland, new Color(.18f, .4f, .13f), .52f));
-            var foliageLight = Make(Color.Lerp(palette.lowland, new Color(.45f, .58f, .21f), .5f));
             foliageCard=biome==SurfaceBiome.Temperate?MakeTextured("FoliageCutout",Color.white,0,.22f):null;
             var glow = Make(biome == SurfaceBiome.Volcanic ? new Color(1, .28f, .08f) : new Color(.13f, .9f, .85f), .1f,
                 biome == SurfaceBiome.Volcanic ? new Color(2.5f, .2f, .04f) : new Color(.1f, 1.3f, 1.1f));
@@ -552,11 +550,10 @@ namespace OrbitDominion
                     bool nearRelic = false;
                     foreach (var relic in relicPositions) if (Vector2.Distance(new Vector2(p.x, p.z), relic) < 8) nearRelic = true;
                     if (nearRelic) continue;
-                    if (biome == SurfaceBiome.Temperate) BuildPlant(p, random, bark, foliage, foliageLight);
-                    else if (biome == SurfaceBiome.Toxic) BuildFungus(p, random, dark, accent, glow);
-                    else if (biome == SurfaceBiome.Frozen) BuildSpire(p, random, accent, glow, true);
-                    else if (biome == SurfaceBiome.Volcanic) BuildSpire(p, random, dark, glow, false);
-                    else BuildSpire(p, random, dark, accent, false);
+                    if (biome == SurfaceBiome.Temperate) BuildPlant(p, random, bark);
+                    else if (biome == SurfaceBiome.Toxic) BuildFungus(p, random, dark, accent);
+                    else if (biome == SurfaceBiome.Frozen) BuildSpire(p, random, accent, true);
+                    else BuildSpire(p, random, dark, false);
                 }
                 BuildLandmarks(random, dark, biome == SurfaceBiome.Temperate ? foliage : accent, glow);
             }
@@ -570,9 +567,9 @@ namespace OrbitDominion
         void BuildPlayerStructures()
         {
             SurfacePalette palette = SurfacePalette.For(Biome);
-            buildAlloy = MakeTextured("PbrConstruction",new Color(.42f,.48f,.52f),.8f,.72f);
+            buildAlloy = MakeTextured("PbrConstruction",new Color(.27f,.32f,.35f),.62f,.43f);
             buildPanel = MakeTextured("PbrConstruction",Color.Lerp(palette.stone,new Color(.82f,.86f,.87f),.7f),.38f,.4f);
-            buildGlass = Make(new Color(.05f, .32f, .42f), .2f, new Color(.05f, .75f, 1.15f), .88f);
+            buildGlass = Make(new Color(.075f, .14f, .18f), .55f, null, .88f);
             buildPreview = Make(new Color(.08f, .7f, .72f), .1f, new Color(.08f, 1.6f, 1.8f));
             buildConcrete = MakeTextured("PbrTerrain",Color.Lerp(palette.stone,Color.white,.56f),.04f,.17f);
             buildRoad = MakeTextured("PbrRoad",Color.white,.05f,.12f);
@@ -589,139 +586,11 @@ namespace OrbitDominion
             root.transform.SetParent(sceneRoot, false);
             root.transform.localPosition = build.position;
             root.transform.localRotation = Quaternion.Euler(0, build.rotation * 90, 0);
-            switch (build.kind)
-            {
-                case SurfaceBuildKind.Foundation:
-                    Shape("Foundation block", PrimitiveType.Cube, root.transform, Vector3.up * .32f, new Vector3(4, .64f, 4), buildPanel);
-                    Shape("Foundation inset", PrimitiveType.Cube, root.transform, Vector3.up * .67f, new Vector3(3.5f, .08f, 3.5f), buildAlloy);
-                    for (int x = -1; x <= 1; x += 2) for (int z = -1; z <= 1; z += 2)
-                        Shape("Foundation light", PrimitiveType.Cube, root.transform, new Vector3(x * 1.72f, .69f, z * 1.72f), new Vector3(.24f, .1f, .24f), buildGlass);
-                    break;
-                case SurfaceBuildKind.Wall:
-                    Shape("Wall panel", PrimitiveType.Cube, root.transform, new Vector3(0, 1.8f, 0), new Vector3(3.55f, 3.25f, .32f), buildPanel);
-                    Shape("Wall window", PrimitiveType.Cube, root.transform, new Vector3(0, 2.05f, -.19f), new Vector3(2.25f, 1.25f, .06f), buildGlass);
-                    for (int x = -1; x <= 1; x += 2)
-                        Shape("Wall frame", PrimitiveType.Cube, root.transform, new Vector3(x * 1.86f, 1.8f, 0), new Vector3(.28f, 3.65f, .52f), buildAlloy);
-                    Shape("Wall header", PrimitiveType.Cube, root.transform, new Vector3(0, 3.57f, 0), new Vector3(4, .24f, .52f), buildAlloy);
-                    break;
-                case SurfaceBuildKind.Ramp:
-                    var ramp = Shape("Driveable ramp", PrimitiveType.Cube, root.transform, new Vector3(0, 1.55f, 0), new Vector3(4, .42f, 5), buildPanel);
-                    ramp.transform.localRotation = Quaternion.Euler(-32, 0, 0);
-                    for (int side = -1; side <= 1; side += 2)
-                        Shape("Ramp rail", PrimitiveType.Cube, root.transform, new Vector3(side * 1.88f, 1.65f, 0), new Vector3(.16f, .25f, 5), buildGlass).transform.localRotation = Quaternion.Euler(-32, 0, 0);
-                    break;
-                case SurfaceBuildKind.Habitat:
-                    Shape("Habitat base", PrimitiveType.Cylinder, root.transform, Vector3.up * .45f, new Vector3(3.25f, .45f, 3.25f), buildAlloy);
-                    Shape("Habitat pressure dome", PrimitiveType.Sphere, root.transform, Vector3.up * 1.85f, new Vector3(5.4f, 3.1f, 5.4f), buildPanel);
-                    Shape("Habitat panorama", PrimitiveType.Sphere, root.transform, new Vector3(0, 2.2f, 1.95f), new Vector3(3.5f, 1.35f, .28f), buildGlass);
-                    Shape("Habitat airlock", PrimitiveType.Cube, root.transform, new Vector3(0, 1.05f, 2.75f), new Vector3(1.55f, 2.05f, 1.35f), buildAlloy);
-                    VisualFactory.Ring("Habitat luminous band", root.transform, 2.72f, .12f, buildGlass, 72).transform.localPosition = Vector3.up * 1.65f;
-                    break;
-                case SurfaceBuildKind.Beacon:
-                    Shape("Beacon footing", PrimitiveType.Cylinder, root.transform, Vector3.up * .25f, new Vector3(1.35f, .25f, 1.35f), buildAlloy);
-                    Shape("Beacon mast", PrimitiveType.Cylinder, root.transform, Vector3.up * 2.15f, new Vector3(.24f, 2.1f, .24f), buildPanel);
-                    Shape("Beacon core", PrimitiveType.Sphere, root.transform, Vector3.up * 4.3f, Vector3.one * .75f, buildGlass);
-                    for (int i = 0; i < 2; i++)
-                    {
-                        var ring = VisualFactory.Ring("Beacon transmission ring", root.transform, 1.2f + i * .55f, .1f, buildGlass, 48);
-                        ring.transform.localPosition = Vector3.up * (3.7f + i * .45f); ring.transform.localRotation = Quaternion.Euler(65 - i * 35, i * 45, 0);
-                    }
-                    break;
-                case SurfaceBuildKind.Road:
-                    BuildRoadTile(root.transform);
-                    break;
-                case SurfaceBuildKind.Arcology:
-                    BuildArcology(root.transform);
-                    break;
-                case SurfaceBuildKind.Industry:
-                    BuildIndustry(root.transform);
-                    break;
-                case SurfaceBuildKind.Spaceport:
-                    BuildSpaceport(root.transform);
-                    break;
-            }
+            SurfaceArchitecture.Build(build.kind, root.transform, buildPanel, buildAlloy, buildGlass,
+                buildConcrete, buildRoad, buildMarking, buildHazard);
             buildVisuals[build.id] = root; return root;
         }
 
-        void BuildRoadTile(Transform root)
-        {
-            Shape("Road / compacted subbase", PrimitiveType.Cube, root, new Vector3(0, .08f, 0), new Vector3(4, .16f, 4), buildConcrete);
-            Shape("Road / sealed driving surface", PrimitiveType.Cube, root, new Vector3(0, .19f, 0), new Vector3(3.45f, .12f, 4.02f), buildRoad);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Shape("Road / raised curb", PrimitiveType.Cube, root, new Vector3(side * 1.86f, .29f, 0), new Vector3(.25f, .25f, 4), buildConcrete);
-                for (int z = -1; z <= 1; z += 2)
-                    Shape("Road / edge reflector", PrimitiveType.Cube, root, new Vector3(side * 1.68f, .29f, z * 1.38f), new Vector3(.13f, .07f, .22f), buildGlass);
-            }
-            for (int z = -1; z <= 1; z += 2)
-                Shape("Road / center marking", PrimitiveType.Cube, root, new Vector3(0, .265f, z * 1.18f), new Vector3(.1f, .025f, 1.08f), buildMarking);
-        }
-
-        void BuildArcology(Transform root)
-        {
-            Shape("Arcology / reinforced foundation", PrimitiveType.Cube, root, new Vector3(0, .25f, 0), new Vector3(7.2f, .5f, 7.2f), buildConcrete);
-            Shape("Arcology / public podium", PrimitiveType.Cylinder, root, new Vector3(0, .85f, 0), new Vector3(3.35f, .6f, 3.35f), buildAlloy);
-            Shape("Arcology / inhabited tower", PrimitiveType.Cylinder, root, new Vector3(0, 5.9f, 0), new Vector3(2.45f, 4.55f, 2.45f), buildPanel);
-            for (int floor = 0; floor < 7; floor++)
-            {
-                var band = VisualFactory.Ring("Arcology / illuminated floor", root, 2.5f, .09f, buildGlass, 72);
-                band.transform.localPosition = Vector3.up * (2.2f + floor * 1.18f);
-            }
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Shape("Arcology / structural buttress", PrimitiveType.Cube, root, new Vector3(side * 2.55f, 3.35f, 0), new Vector3(.38f, 5.5f, 1.1f), buildAlloy);
-                Shape("Arcology / sky garden", PrimitiveType.Cylinder, root, new Vector3(side * 2.8f, 6.4f, 0), new Vector3(1.05f, .25f, 1.05f), buildConcrete);
-                Shape("Arcology / garden canopy", PrimitiveType.Sphere, root, new Vector3(side * 2.8f, 6.82f, 0), new Vector3(1.4f, .6f, 1.4f), buildGlass);
-            }
-            Shape("Arcology / crown", PrimitiveType.Sphere, root, new Vector3(0, 10.65f, 0), new Vector3(4.5f, 1.15f, 4.5f), buildAlloy);
-            Shape("Arcology / entry airlock", PrimitiveType.Cube, root, new Vector3(0, 1.15f, 3.25f), new Vector3(1.8f, 2.1f, .9f), buildGlass);
-            BuildBeam("Arcology / communications spire", root, new Vector3(0, 11.15f, 0), new Vector3(0, 13.2f, 0), .1f, buildAlloy);
-            Shape("Arcology / aviation beacon", PrimitiveType.Sphere, root, new Vector3(0, 13.28f, 0), Vector3.one * .24f, buildHazard);
-        }
-
-        void BuildIndustry(Transform root)
-        {
-            Shape("Industry / concrete apron", PrimitiveType.Cube, root, new Vector3(0, .2f, 0), new Vector3(8, .4f, 8), buildConcrete);
-            Shape("Industry / fabrication hall", PrimitiveType.Cube, root, new Vector3(-.8f, 2.25f, .4f), new Vector3(5.9f, 4.1f, 5.6f), buildPanel);
-            Shape("Industry / roof cap", PrimitiveType.Cube, root, new Vector3(-.8f, 4.42f, .4f), new Vector3(6.25f, .25f, 5.95f), buildAlloy);
-            for (int i = -1; i <= 1; i++)
-                Shape("Industry / clerestory window", PrimitiveType.Cube, root, new Vector3(i * 1.65f - .8f, 3.15f, 3.24f), new Vector3(1.15f, .65f, .08f), buildGlass);
-            for (int tank = 0; tank < 2; tank++)
-            {
-                float z = -2.15f + tank * 3.9f;
-                Shape("Industry / process tank", PrimitiveType.Cylinder, root, new Vector3(2.85f, 1.72f, z), new Vector3(.82f, 1.5f, .82f), buildAlloy);
-                Shape("Industry / tank dome", PrimitiveType.Sphere, root, new Vector3(2.85f, 3.25f, z), new Vector3(1.65f, .55f, 1.65f), buildPanel);
-                BuildBeam("Industry / transfer pipe", root, new Vector3(2.85f, 2.4f, z), new Vector3(1.5f, 2.4f, z), .11f, buildHazard);
-            }
-            for (int stack = -1; stack <= 1; stack += 2)
-            {
-                Shape("Industry / filtered exhaust", PrimitiveType.Cylinder, root, new Vector3(stack * 1.65f - .8f, 5.4f, -.9f), new Vector3(.32f, 1.4f, .32f), buildAlloy);
-                Shape("Industry / exhaust status", PrimitiveType.Cylinder, root, new Vector3(stack * 1.65f - .8f, 6.78f, -.9f), new Vector3(.38f, .08f, .38f), buildHazard);
-            }
-            for (int row = 0; row < 2; row++) for (int column = 0; column < 3; column++)
-                Shape("Industry / rooftop collector", PrimitiveType.Cube, root, new Vector3(-2.25f + column * 1.45f, 4.63f, -.8f + row * 1.55f), new Vector3(1.2f, .08f, 1.25f), buildGlass);
-        }
-
-        void BuildSpaceport(Transform root)
-        {
-            Shape("Spaceport / load-bearing slab", PrimitiveType.Cylinder, root, new Vector3(0, .16f, 0), new Vector3(6, .18f, 6), buildConcrete);
-            Shape("Spaceport / landing surface", PrimitiveType.Cylinder, root, new Vector3(0, .36f, 0), new Vector3(5.65f, .08f, 5.65f), buildRoad);
-            var perimeter = VisualFactory.Ring("Spaceport / perimeter guidance", root, 5.05f, .16f, buildMarking, 96);
-            perimeter.transform.localPosition = Vector3.up * .47f;
-            var inner = VisualFactory.Ring("Spaceport / touchdown ring", root, 2.45f, .12f, buildGlass, 72);
-            inner.transform.localPosition = Vector3.up * .49f;
-            for (int arm = 0; arm < 4; arm++)
-            {
-                float angle = arm * 90;
-                Vector3 outward = Quaternion.Euler(0, angle, 0) * Vector3.forward;
-                var stripe = Shape("Spaceport / approach vector", PrimitiveType.Cube, root, outward * 3.75f + Vector3.up * .49f, new Vector3(.18f, .025f, 2.15f), buildMarking);
-                stripe.transform.localRotation = Quaternion.Euler(0, angle, 0);
-                Shape("Spaceport / landing beacon", PrimitiveType.Cylinder, root, outward * 5.2f + Vector3.up * .65f, new Vector3(.18f, .65f, .18f), buildAlloy);
-                Shape("Spaceport / beacon lens", PrimitiveType.Sphere, root, outward * 5.2f + Vector3.up * 1.35f, Vector3.one * .24f, buildGlass);
-            }
-            Shape("Spaceport / service island", PrimitiveType.Cube, root, new Vector3(-4.4f, 1.05f, -1.4f), new Vector3(1.3f, 1.7f, 2.7f), buildAlloy);
-            Shape("Spaceport / operations glass", PrimitiveType.Cube, root, new Vector3(-3.71f, 1.3f, -1.4f), new Vector3(.08f, .72f, 1.9f), buildGlass);
-        }
 
         void BuildBeam(string name, Transform parent, Vector3 from, Vector3 to, float thickness, Material material)
         {
@@ -883,55 +752,71 @@ namespace OrbitDominion
             water.AddComponent<OwnedMesh>().mesh = mesh;
         }
 
-        void BuildPlant(Vector3 p, System.Random random, Material trunk, Material leaf, Material light)
+        void BuildPlant(Vector3 p, System.Random random, Material trunk)
         {
-            float height = 4 + (float)random.NextDouble() * 5;
-            Shape("Grove / trunk", PrimitiveType.Cylinder, sceneRoot, p + Vector3.up * height * .5f, new Vector3(.27f, height * .5f, .27f), trunk);
-            for (int j = 0; j < 4; j++)
+            float height = 4.5f + (float)random.NextDouble() * 4;
+            var tree = new SurfaceMeshBuilder();
+            Vector3 top = p + new Vector3(.35f, height, -.15f);
+            tree.Beam(p - Vector3.up * .15f, top, .27f, trunk, .055f);
+            for (int j = 0; j < 5; j++)
             {
-                float angle = j * Mathf.PI * .5f + (float)random.NextDouble() * .5f;
-                float reach = 1.15f + (float)random.NextDouble() * 1.3f;
-                Vector3 branchBase=p+Vector3.up*(height*(.5f+j*.09f));
-                Vector3 crown=p+new Vector3(Mathf.Cos(angle)*reach,height*.82f+(float)random.NextDouble()*2,Mathf.Sin(angle)*reach);
-                BuildBeam("Grove / branch",sceneRoot,branchBase,crown,.09f,trunk);
-                if(foliageCard!=null)for(int card=0;card<2;card++)
-                {
-                    float yaw=angle*Mathf.Rad2Deg+card*78+(float)random.NextDouble()*28;
-                    Vector3 offset=new((float)random.NextDouble()*.5f-.25f,(float)random.NextDouble()*.55f,.0f);
-                    VisualFactory.FoliageCard("Grove / photoreal leaf cluster",sceneRoot,crown+offset,
-                        new Vector2(3.4f+reach*.45f,2.55f+reach*.3f),Quaternion.Euler((float)random.NextDouble()*12-6,yaw,0),foliageCard);
-                }
-                else Shape("Grove / leafy crown",PrimitiveType.Sphere,sceneRoot,crown,new Vector3(1.8f,1.35f,1.9f),j%3==0?light:leaf);
+                float angle = j * 2.4f + (float)random.NextDouble() * .35f;
+                Vector3 direction = new(Mathf.Cos(angle), 0, Mathf.Sin(angle));
+                tree.Beam(p + direction * .9f, p + Vector3.up * .65f, .06f, trunk, .16f);
+                float reach = 1.3f + (float)random.NextDouble() * 1.15f;
+                Vector3 branchBase = p + Vector3.up * (height * (.43f + j * .085f));
+                Vector3 crown = p + direction * reach + Vector3.up * (height * .77f + j * .35f);
+                tree.Beam(branchBase, crown, .1f, trunk, .025f);
+                tree.Beam(Vector3.Lerp(branchBase, crown, .55f), crown + new Vector3(.5f, .8f, -.4f), .045f, trunk, .012f);
+                if (foliageCard != null) for (int card = 0; card < 2; card++)
+                    VisualFactory.FoliageCard("Grove / photoreal leaf cluster", sceneRoot, crown,
+                        new Vector2(4.1f, 3.6f), Quaternion.Euler(card * 24 - 8, angle * Mathf.Rad2Deg + card * 85, 0), foliageCard);
             }
-            if(foliageCard!=null)VisualFactory.FoliageCard("Grove / crown",sceneRoot,p+Vector3.up*(height+1.1f),
-                new Vector2(3.8f,3.1f),Quaternion.Euler(0,(float)random.NextDouble()*180,0),foliageCard);
+            tree.Finish(sceneRoot, "Grove / tapered trunk and roots");
+            if (foliageCard != null) VisualFactory.FoliageCard("Grove / crown", sceneRoot, top + Vector3.up * .5f,
+                new Vector2(3.7f, 3.3f), Quaternion.Euler(0, (float)random.NextDouble() * 180, 0), foliageCard);
         }
 
-        void BuildFungus(Vector3 p, System.Random random, Material stem, Material cap, Material light)
+        void BuildFungus(Vector3 p, System.Random random, Material stem, Material cap)
         {
-            float height = 2 + (float)random.NextDouble() * 5;
-            Shape("Alien mycelium / stem", PrimitiveType.Cylinder, sceneRoot, p + Vector3.up * height * .5f, new Vector3(.55f, height * .5f, .55f), stem);
-            Shape("Alien mycelium / cap", PrimitiveType.Sphere, sceneRoot, p + Vector3.up * height, new Vector3(4, .7f, 4), random.NextDouble() > .65 ? light : cap);
+            float height = 2 + (float)random.NextDouble() * 4;
+            var m = new SurfaceMeshBuilder();
+            m.Lathe(p, new[] { Vector2.zero, new Vector2(.65f, 0), new Vector2(.3f, height * .3f),
+                new Vector2(.19f, height * .8f), new Vector2(.65f, height), new Vector2(0, height) }, stem);
+            m.Lathe(p + Vector3.up * height, new[] { Vector2.zero, new Vector2(2.1f, -.18f), new Vector2(2.25f, 0),
+                new Vector2(1.9f, .25f), new Vector2(1.1f, .65f), new Vector2(0, .85f) }, cap, 32);
+            for (int i = 0; i < 12; i++)
+            {
+                float a = i * Mathf.PI / 6;
+                m.Beam(p + Vector3.up * height, p + new Vector3(Mathf.Cos(a) * 1.95f, height - .18f, Mathf.Sin(a) * 1.95f), .025f, stem);
+            }
+            m.Finish(sceneRoot, "Alien mycelium / ribbed fruiting body");
         }
 
-        void BuildSpire(Vector3 p, System.Random random, Material baseMaterial, Material tipMaterial, bool crystalline)
+        void BuildSpire(Vector3 p, System.Random random, Material baseMaterial, bool crystalline)
         {
-            float height = 2 + (float)random.NextDouble() * (crystalline ? 9 : 13);
-            var pillar = Shape(crystalline ? "Ice needle" : "Eroded mineral spire", PrimitiveType.Cylinder, sceneRoot,
-                p + Vector3.up * height * .5f, new Vector3(1.2f, height * .5f, 1.2f), baseMaterial);
-            pillar.transform.rotation = Quaternion.Euler((float)random.NextDouble() * 22 - 11, (float)random.NextDouble() * 180, (float)random.NextDouble() * 22 - 11);
-            Shape("Crystal crown", PrimitiveType.Sphere, sceneRoot, p + Vector3.up * height, new Vector3(1.4f, 1.9f, 1.4f), tipMaterial);
+            var m = new SurfaceMeshBuilder();
+            float height = 2.5f + (float)random.NextDouble() * (crystalline ? 6 : 8);
+            float width = crystalline ? height * .35f : height * .65f;
+            m.Rock(p, new Vector3(width, height, width * .85f), random.Next(), baseMaterial, crystalline);
+            for (int i = 0; i < 3; i++)
+            {
+                float angle = i * 2.1f;
+                Vector3 offset = new(Mathf.Cos(angle) * width * .4f, -.12f, Mathf.Sin(angle) * width * .4f);
+                m.Rock(p + offset, new Vector3(width * .65f, height * (.2f + i * .11f), width * .6f),
+                    random.Next(), baseMaterial, crystalline);
+            }
+            m.Finish(sceneRoot, crystalline ? "Fractured glacial formation" : "Weathered bedrock formation");
         }
 
         void BuildLandmarks(System.Random random, Material dark, Material accent, Material glow)
         {
             SurfaceBiome biome = Biome;
-            Material foam = biome == SurfaceBiome.Ocean ? Make(new Color(.37f, .72f, .77f), .25f) : null;
-            int count = biome == SurfaceBiome.Ocean ? 40 : biome == SurfaceBiome.Temperate ? 130 : biome == SurfaceBiome.Toxic ? 95 : 20;
+            var detail = new SurfaceMeshBuilder();
+            int count = biome == SurfaceBiome.Ocean ? 24 : biome == SurfaceBiome.Temperate ? 190 : biome == SurfaceBiome.Toxic ? 95 : 48;
             for (int i = 0; i < count; i++)
             {
-                Vector3 p = Scatter(random, biome == SurfaceBiome.Ocean ? 22 : 13,
-                    biome == SurfaceBiome.Ocean ? 175 : biome == SurfaceBiome.Temperate || biome == SurfaceBiome.Toxic ? 92 : 140);
+                Vector3 p = Scatter(random, biome == SurfaceBiome.Ocean ? 22 : 13, biome == SurfaceBiome.Ocean ? 175 : 140);
                 p.y = Ground(p.x, p.z);
                 if (biome != SurfaceBiome.Ocean && Terrain(p.x, p.z) < SurfaceRules.WaterLevel(biome) + .15f) continue;
                 bool nearRelic = false;
@@ -939,56 +824,36 @@ namespace OrbitDominion
                 if (nearRelic) continue;
                 if (biome == SurfaceBiome.Ocean)
                 {
-                    var wave = Shape("Foam on open water", PrimitiveType.Cube, sceneRoot, new Vector3(p.x, 1.22f, p.z),
-                        new Vector3(3 + (float)random.NextDouble() * 9, .06f, .18f), foam);
-                    wave.transform.rotation = Quaternion.Euler(0, i * 41, 0);
-                    if (i % 8 == 0)
-                    {
-                        Shape("Leviathan back", PrimitiveType.Sphere, sceneRoot, new Vector3(p.x, .95f, p.z), new Vector3(9, 2, 3.5f), dark);
-                        Shape("Leviathan luminous crest", PrimitiveType.Sphere, sceneRoot, new Vector3(p.x, 1.8f, p.z), new Vector3(6, .25f, .3f), glow);
-                    }
+                    if (i % 6 == 0) detail.Rock(new Vector3(p.x, .3f, p.z), new Vector3(7, 1.3f, 2.8f), random.Next(), dark);
                 }
-                else if (biome == SurfaceBiome.Volcanic)
+                else if (biome == SurfaceBiome.Temperate)
                 {
-                    var flow = Shape("Lava fissure", PrimitiveType.Cube, sceneRoot, p + Vector3.up * .13f,
-                        new Vector3(2 + (float)random.NextDouble() * 8, .1f, .35f), glow);
-                    flow.transform.rotation = Quaternion.Euler(0, i * 71, 0);
+                    detail.Grass(p, random.Next(), accent);
+                    if (i % 9 == 0) detail.Rock(p, new Vector3(1.8f, .7f, 1.4f), random.Next(), dark);
                 }
-                else if (biome == SurfaceBiome.Rocky)
+                else if (biome == SurfaceBiome.Toxic)
                 {
-                    var boulder = Shape("Fractured outcrop", PrimitiveType.Cube, sceneRoot, p + Vector3.up * 1.1f,
-                        new Vector3(3, 2.3f, 4.5f), i % 3 == 0 ? accent : dark);
-                    boulder.transform.rotation = Quaternion.Euler(i * 17, i * 47, i * 13);
-                }
-                else if (biome == SurfaceBiome.Desert)
-                {
-                    if (i % 4 == 0)
-                    {
-                        Shape("Weathered gate / left", PrimitiveType.Cube, sceneRoot, p + new Vector3(-2, 3, 0), new Vector3(1.2f, 6, 1.5f), dark);
-                        Shape("Weathered gate / right", PrimitiveType.Cube, sceneRoot, p + new Vector3(2, 3, 0), new Vector3(1.2f, 6, 1.5f), dark);
-                        Shape("Weathered gate / lintel", PrimitiveType.Cube, sceneRoot, p + new Vector3(0, 6, 0), new Vector3(6, 1.2f, 1.5f), accent);
-                    }
-                }
-                else if (biome == SurfaceBiome.Frozen)
-                {
-                    var shard = Shape("Glacial shard", PrimitiveType.Cube, sceneRoot, p + Vector3.up * 2.5f,
-                        new Vector3(1.8f, 5, 3), i % 3 == 0 ? glow : accent);
-                    shard.transform.rotation = Quaternion.Euler(15, i * 47, 28);
+                    detail.Rock(p, new Vector3(1.4f + i % 3, .35f, 1.1f + i % 4), random.Next(), accent);
+                    detail.Grass(p, random.Next(), accent);
                 }
                 else
                 {
-                    if (biome == SurfaceBiome.Toxic)
-                        Shape("Spore mat", PrimitiveType.Sphere, sceneRoot, p + Vector3.up * .18f,
-                            new Vector3(1.4f + (i % 3), .25f, 1.1f + (i % 4)), i % 7 == 0 ? glow : accent);
-                    else for (int blade = 0; blade < 3; blade++)
+                    float width = 1.2f + (float)random.NextDouble() * 3.2f;
+                    detail.Rock(p, new Vector3(width, width * (biome == SurfaceBiome.Frozen ? 1.4f : .55f), width * 1.1f),
+                        random.Next(), i % 3 == 0 ? accent : dark, biome == SurfaceBiome.Frozen);
+                    if (biome == SurfaceBiome.Volcanic)
                     {
-                        var grass = Shape("Meadow grass", PrimitiveType.Capsule, sceneRoot,
-                            p + new Vector3((blade - 1) * .36f, .42f, (blade % 2) * .23f),
-                            new Vector3(.13f, .46f + (float)random.NextDouble() * .25f, .13f), accent);
-                        grass.transform.rotation = Quaternion.Euler(0, i * 31, (blade - 1) * 19);
+                        Vector3 start = p;
+                        for (int j = 0; j < 4; j++)
+                        {
+                            Vector3 end = start + new Vector3(1.2f, 0, (float)random.NextDouble() - .5f);
+                            start.y = Terrain(start.x, start.z) + .06f; end.y = Terrain(end.x, end.z) + .06f;
+                            detail.Beam(start, end, .035f, glow); start = end;
+                        }
                     }
                 }
             }
+            detail.Finish(sceneRoot, "Surface / scattered stone and ground cover");
         }
 
         void BuildFauna(System.Random random, Material body, Material accent, Material eye)
@@ -1016,26 +881,24 @@ namespace OrbitDominion
             Vector3 center = new(62, Ground(62, 45), 45);
             if (Biome == SurfaceBiome.Ocean) center.y = 1.5f;
             Shape("Civilization / landing platform", PrimitiveType.Cylinder, sceneRoot, center + Vector3.up * .3f, new Vector3(19, .4f, 19), structure);
-            Shape("Civilization / central dome", PrimitiveType.Sphere, sceneRoot, center + Vector3.up * 2.7f, new Vector3(8, 4.8f, 8), accent);
+            Material glazing = Make(new Color(.075f, .14f, .18f), .55f, null, .85f);
+            Material concrete = MakeTextured("PbrTerrain", new Color(.48f, .47f, .42f), 0, .15f);
+            var hub = new GameObject("Civilization / community hub").transform;
+            hub.SetParent(sceneRoot, false); hub.localPosition = center + Vector3.up * .55f;
+            SurfaceArchitecture.Build(SurfaceBuildKind.Habitat, hub, accent, structure, glazing, concrete, concrete, accent, light);
             for (int i = 0; i < 9; i++)
             {
                 float a = i * Mathf.PI * 2 / 9;
                 Vector3 p = center + new Vector3(Mathf.Cos(a) * 13, 0, Mathf.Sin(a) * 13);
                 p.y = Ground(p.x, p.z);
-                BuildSurfaceLink("Civilization / radial transit road", center + Vector3.up * .36f, p + Vector3.up * .18f, 2.2f, structure);
-                float height = 4 + (float)random.NextDouble() * 4;
-                Shape("Occupied habitat", PrimitiveType.Cylinder, sceneRoot, p + Vector3.up * (height * .5f + .4f), new Vector3(2.4f, height * .5f, 2.4f), structure);
-                Shape("Habitat roof", PrimitiveType.Sphere, sceneRoot, p + Vector3.up * (height + .45f), new Vector3(5.2f, 1.3f, 5.2f), accent);
-                for (int w = 0; w < 4; w++)
-                {
-                    float wa = w * Mathf.PI * .5f;
-                    Shape("Lit habitat window", PrimitiveType.Sphere, sceneRoot,
-                        p + new Vector3(Mathf.Sin(wa) * 2.37f, height * .58f, Mathf.Cos(wa) * 2.37f),
-                        new Vector3(.65f, .52f, .22f), light);
-                }
+                BuildSurfaceLink("Civilization / radial transit road", center + Vector3.up * .36f, p + Vector3.up * .18f, 2.2f, concrete);
+                var habitat = new GameObject("Occupied habitat").transform;
+                habitat.SetParent(sceneRoot, false); habitat.localPosition = p;
+                habitat.localRotation = Quaternion.LookRotation(new Vector3(center.x - p.x, 0, center.z - p.z));
+                SurfaceArchitecture.Build(SurfaceBuildKind.Habitat, habitat, accent, structure, glazing, concrete, concrete, accent, light);
                 Vector3 lamp = Vector3.Lerp(center, p, .63f); lamp.y = Ground(lamp.x, lamp.z);
                 BuildBeam("Civilization / street light mast", sceneRoot, lamp + Vector3.up * .15f, lamp + Vector3.up * 2.6f, .07f, structure);
-                Shape("Civilization / street light", PrimitiveType.Sphere, sceneRoot, lamp + Vector3.up * 2.7f, Vector3.one * .25f, light);
+                Shape("Civilization / street light", PrimitiveType.Sphere, sceneRoot, lamp + Vector3.up * 2.7f, Vector3.one * .15f, light);
             }
             for (int i = 0; i < 6; i++)
             {
@@ -1086,75 +949,18 @@ namespace OrbitDominion
                 Shape("Landing thruster", PrimitiveType.Cylinder, lander, new Vector3(side * 5, -2.2f, -3), new Vector3(.6f, 2, .6f), glow);
         }
 
-        void RoverStrut(string name, Vector3 from, Vector3 to, float thickness, Material material)
-        {
-            var strut = Shape(name, PrimitiveType.Cylinder, explorer, (from + to) * .5f,
-                new Vector3(thickness, Vector3.Distance(from, to) * .5f, thickness), material);
-            strut.transform.localRotation = Quaternion.FromToRotation(Vector3.up, to - from);
-        }
 
         void BuildRover()
         {
             var hull = MakeTextured("PbrConstruction",new Color(.82f,.86f,.83f),.34f,.54f);
             var frame = MakeTextured("PbrConstruction",new Color(.25f,.31f,.34f),.68f,.66f);
-            var tire = MakeTextured("PbrRoad",new Color(.25f,.27f,.28f),0,.12f);
+            var tire = MakeTextured("PbrRoad",new Color(.43f,.45f,.46f),0,.19f);
             var solar = Make(new Color(.035f, .2f, .34f), .55f);
             var glass = Make(new Color(.1f, .36f, .44f), .45f);
             var ochre = MakeTextured("PbrConstruction",new Color(.93f,.42f,.13f),.25f,.46f);
             var beacon = Make(new Color(.45f, .85f, .96f), .15f, new Color(.15f, 1.1f, 1.4f));
 
-            Shape("Rover / armored undercarriage", PrimitiveType.Cube, explorer, new Vector3(0, 1.19f, 0), new Vector3(2.65f, .38f, 4.25f), frame);
-            Shape("Rover / white chassis", PrimitiveType.Cube, explorer, new Vector3(0, 1.55f, 0), new Vector3(2.8f, .4f, 4.35f), hull);
-            Shape("Rover / front bumper", PrimitiveType.Cube, explorer, new Vector3(0, 1.08f, 2.2f), new Vector3(3.1f, .24f, .28f), ochre);
-            Shape("Rover / pressure cabin", PrimitiveType.Cube, explorer, new Vector3(0, 2.21f, -.45f), new Vector3(2.05f, 1.05f, 2.55f), hull);
-            Shape("Rover / panoramic windscreen", PrimitiveType.Cube, explorer, new Vector3(0, 2.38f, .87f), new Vector3(1.88f, .68f, .1f), glass);
-            Shape("Rover / roof", PrimitiveType.Cube, explorer, new Vector3(0, 2.83f, -.45f), new Vector3(2.27f, .16f, 2.8f), ochre);
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Shape("Rover / solar wing", PrimitiveType.Cube, explorer,
-                    new Vector3(side * 2.12f, 1.9f, -.42f), new Vector3(1.48f, .13f, 2.78f), frame);
-                for (int row = 0; row < 4; row++) for (int column = 0; column < 2; column++)
-                    Shape("Rover / photovoltaic cell", PrimitiveType.Cube, explorer,
-                        new Vector3(side * (1.75f + column * .72f), 1.99f, -.42f + (row - 1.5f) * .62f),
-                        new Vector3(.56f, .04f, .54f), solar);
-                RoverStrut("Rover / wing support", new Vector3(side * 1.15f, 1.45f, -.5f),
-                    new Vector3(side * 2.1f, 1.86f, -.5f), .12f, frame);
-                Shape("Rover / side stripe", PrimitiveType.Cube, explorer, new Vector3(side * 1.41f, 1.64f, .6f),
-                    new Vector3(.035f, .11f, 2.35f), ochre);
-                for (int axle = 0; axle < 3; axle++)
-                {
-                    float z = (axle - 1) * 1.64f;
-                    int index = (side < 0 ? 0 : 3) + axle;
-                    var wheel = Shape("Rover wheel / " + index, PrimitiveType.Cylinder, explorer,
-                        new Vector3(side * 1.63f, .68f, z), new Vector3(1.34f, .28f, 1.34f), tire);
-                    wheels[index] = wheel.transform;
-                    Shape("Wheel hub", PrimitiveType.Cylinder, wheel.transform, Vector3.zero,
-                        new Vector3(.48f, 1.08f, .48f), ochre);
-                    for(int tread=0;tread<10;tread++)
-                    {
-                        float angle=tread*Mathf.PI*2/10;
-                        var block=Shape("Rover wheel / tread",PrimitiveType.Cube,wheel.transform,
-                            new Vector3(Mathf.Cos(angle)*.54f,0,Mathf.Sin(angle)*.54f),new Vector3(.22f,.38f,.12f),tire);
-                        block.transform.localRotation=Quaternion.Euler(0,-angle*Mathf.Rad2Deg,0);
-                    }
-                    RoverStrut("Rover / rocker arm", new Vector3(side * 1.05f, 1.24f, z * .65f),
-                        new Vector3(side * 1.62f, .7f, z), .16f, frame);
-                }
-                pontoons[side < 0 ? 0 : 1] = Shape("Rover flotation pontoon", PrimitiveType.Capsule, explorer,
-                    new Vector3(side * 1.42f, .34f, 0), new Vector3(.7f, 2.2f, .7f), hull);
-                pontoons[side < 0 ? 0 : 1].transform.localRotation = Quaternion.Euler(90, 0, 0);
-            }
-            RoverStrut("Rover / sensor mast", new Vector3(0, 2.85f, .7f), new Vector3(0, 3.84f, 1.15f), .13f, frame);
-            Shape("Rover / stereo camera", PrimitiveType.Cube, explorer, new Vector3(0, 3.88f, 1.17f),
-                new Vector3(1.22f, .36f, .42f), hull);
-            for (int side = -1; side <= 1; side += 2)
-                Shape("Rover / optical sensor", PrimitiveType.Sphere, explorer, new Vector3(side * .42f, 3.89f, 1.4f),
-                    new Vector3(.22f, .2f, .12f), beacon);
-            RoverStrut("Rover / antenna", new Vector3(-.7f, 2.9f, -1.28f), new Vector3(-1.12f, 4.2f, -1.48f), .05f, frame);
-            Shape("Rover / radio beacon", PrimitiveType.Sphere, explorer, new Vector3(-1.12f, 4.2f, -1.48f), Vector3.one * .19f, beacon);
-            RoverStrut("Rover / manipulator", new Vector3(.5f, 1.56f, 1.6f), new Vector3(.7f, 1.1f, 2.73f), .12f, frame);
-            Shape("Rover / relic gripper", PrimitiveType.Cube, explorer, new Vector3(.7f, 1.08f, 2.79f),
-                new Vector3(.48f, .14f, .3f), ochre);
+            SurfaceRoverModel.Build(explorer, wheels, pontoons, hull, frame, tire, solar, glass, ochre, beacon);
         }
 
         void BuildRelics(int seed, Material emissive, Material plinth)
