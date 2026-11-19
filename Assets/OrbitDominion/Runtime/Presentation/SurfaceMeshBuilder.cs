@@ -164,7 +164,9 @@ namespace OrbitDominion
                 mesh.SetVertices(p.vertices); mesh.SetNormals(p.normals); mesh.SetUVs(0, p.uv); mesh.SetTriangles(p.triangles, 0);
                 mesh.RecalculateBounds(); mesh.RecalculateTangents();
                 var item = new GameObject(name); item.transform.SetParent(parent, false);
-                item.AddComponent<MeshFilter>().sharedMesh = mesh; item.AddComponent<MeshRenderer>().sharedMaterial = entry.Key;
+                item.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = item.AddComponent<MeshRenderer>(); renderer.sharedMaterial = entry.Key;
+                renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
                 item.AddComponent<OwnedMesh>().mesh = mesh;
             }
             parts.Clear();

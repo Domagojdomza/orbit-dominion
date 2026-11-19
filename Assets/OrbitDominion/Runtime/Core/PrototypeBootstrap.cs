@@ -119,7 +119,7 @@ namespace OrbitDominion
             yield return new WaitForSeconds(1);
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../model-rover-detail.png"));
             yield return new WaitForSeconds(1);
-            Vector3 districtView=rover.parent.TransformPoint(new Vector3(23,16,8));
+            Vector3 districtView=rover.parent.TransformPoint(new Vector3(0,18,0));
             Vector3 districtTarget=rover.parent.TransformPoint(new Vector3(0,4,30));
             camera.transform.SetPositionAndRotation(districtView,Quaternion.LookRotation(districtTarget-districtView));
             yield return new WaitForSeconds(1);

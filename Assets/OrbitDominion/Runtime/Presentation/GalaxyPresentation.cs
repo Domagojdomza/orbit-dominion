@@ -57,7 +57,7 @@ namespace OrbitDominion
             // Local landing regions are staged in daylight, matching the sun in SurfaceSky.
             Vector3 starlight=world.Surface!=null&&world.Surface.Active?new Vector3(-.58f,-.36f,-.72f):
                 world.Player.transform.position-GalaxyCatalog.StarCenters[system];
-            if(starlight.sqrMagnitude>1)sun.transform.rotation=Quaternion.LookRotation(starlight.normalized);
+            if(starlight.sqrMagnitude>.0001f)sun.transform.rotation=Quaternion.LookRotation(starlight.normalized);
         }
         void OnDestroy(){foreach(var material in materials)if(material!=null)Destroy(material);}
     }

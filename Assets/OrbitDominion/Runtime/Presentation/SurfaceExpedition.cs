@@ -14,6 +14,7 @@ namespace OrbitDominion
         readonly List<GameObject> relicVisuals = new();
         readonly Dictionary<string, GameObject> buildVisuals = new();
         readonly List<GameObject> rallyGates = new();
+        readonly List<(Transform root, float radius, float height)> scenery = new();
         readonly SurfaceSandboxState sandbox = new();
         readonly Transform[] wheels = new Transform[6];
         readonly GameObject[] pontoons = new GameObject[2];
@@ -37,6 +38,7 @@ namespace OrbitDominion
         Color previousFogColor;
         float previousFogDensity, previousFarClip;
         UnityEngine.Rendering.AmbientMode previousAmbientMode;
+        UnityEngine.Rendering.SphericalHarmonicsL2 previousAmbientProbe;
         Color previousAmbientSky,previousAmbientEquator,previousAmbientGround;
         float previousAmbientIntensity;
         CameraClearFlags previousClearFlags;
@@ -125,6 +127,7 @@ namespace OrbitDominion
             previousAmbientMode=RenderSettings.ambientMode;previousAmbientSky=RenderSettings.ambientSkyColor;
             previousAmbientEquator=RenderSettings.ambientEquatorColor;previousAmbientGround=RenderSettings.ambientGroundColor;
             previousAmbientIntensity=RenderSettings.ambientIntensity;
+            previousAmbientProbe=RenderSettings.ambientProbe;
             sceneRoot = new GameObject("Surface expedition / " + destination.Definition.title).transform;
             sceneRoot.SetParent(transform, false);
             sceneRoot.position = SurfaceOrigin;
@@ -143,9 +146,22 @@ namespace OrbitDominion
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = SkyColor();
             RenderSettings.fogDensity = Biome == SurfaceBiome.Ocean ? .0018f : .0028f;
-            SurfacePalette lightingPalette=SurfacePalette.For(Biome);RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Trilight;
+            SurfacePalette lightingPalette=SurfacePalette.For(Biome);RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Custom;
             RenderSettings.ambientSkyColor=lightingPalette.zenith*.45f;RenderSettings.ambientEquatorColor=lightingPalette.horizon*.34f;
             RenderSettings.ambientGroundColor=lightingPalette.stone*.18f;RenderSettings.ambientIntensity=1;
+            // Custom mode keeps the daylight SH; gradient mode replaces it during the next render.
+            var daylight = new UnityEngine.Rendering.SphericalHarmonicsL2();
+            daylight.AddAmbientLight(lightingPalette.horizon * .35f);
+            daylight.AddDirectionalLight(Vector3.up, lightingPalette.cloud, .24f);
+            RenderSettings.ambientProbe = daylight;
+            // This remote local region has no baked probe volume; use its own ambient sky.
+            foreach (var renderer in sceneRoot.GetComponentsInChildren<Renderer>(true))
+                renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            // Broad skylight bounce for the local region; no competing hard shadows.
+            var fill = new GameObject("Surface / diffuse sky bounce").AddComponent<Light>();
+            fill.transform.SetParent(sceneRoot, false); fill.type = LightType.Directional;
+            fill.transform.localRotation = Quaternion.LookRotation(new Vector3(.4f, -.65f, .65f));
+            fill.color = lightingPalette.horizon; fill.intensity = .65f; fill.shadows = LightShadows.None;
             BuildSurfaceReflection();
             Message = "ROVER DEPLOYED / " + destination.Definition.title + " · Drive and recover hidden relics";
             UpdateCamera(true);
@@ -158,7 +174,7 @@ namespace OrbitDominion
             planet = null;
             if (sceneRoot != null) Destroy(sceneRoot.gameObject);
             sceneRoot = null; explorer = null;
-            buildCursor = null; buildVisuals.Clear(); rallyGates.Clear(); rallyRoute = null;
+            buildCursor = null; buildVisuals.Clear(); rallyGates.Clear(); scenery.Clear(); rallyRoute = null;
             buildMode = false; rallyActive = false; rallyElapsed = 0; rallyCheckpoint = 0;
             rover = new RoverMotion(0, 0);
             for (int i = 0; i < wheels.Length; i++) wheels[i] = null;
@@ -175,6 +191,7 @@ namespace OrbitDominion
             RenderSettings.ambientMode=previousAmbientMode;RenderSettings.ambientSkyColor=previousAmbientSky;
             RenderSettings.ambientEquatorColor=previousAmbientEquator;RenderSettings.ambientGroundColor=previousAmbientGround;
             RenderSettings.ambientIntensity=previousAmbientIntensity;
+            RenderSettings.ambientProbe=previousAmbientProbe;
             chase.enabled = true;
             world.Player.FlightDisabled = false;
             Message = "ORBIT RESTORED / " + name;
@@ -342,6 +359,7 @@ namespace OrbitDominion
             if (!sandbox.Remove(build.id)) return false;
             if (buildVisuals.TryGetValue(build.id, out var visual) && visual != null) Destroy(visual);
             buildVisuals.Remove(build.id); world.Empire.State.Reward(cost.x * .5f, cost.y * .5f);
+            UpdateSceneryVisibility();
             Message = $"{build.kind.ToString().ToUpperInvariant()} RECYCLED / 50% materials returned";
             world.Session?.SaveNow(); return true;
         }
@@ -520,9 +538,10 @@ namespace OrbitDominion
                 SurfaceBiome.Toxic => new Color(.23f, .28f, .1f),
                 _ => new Color(.2f, .32f, .23f)
             };
-            var accent = MakeTextured("PbrTerrain", Color.Lerp(soil, new Color(.72f, .75f, .62f), .42f), .02f, .2f);
-            var dark = MakeTextured("PbrTerrain", Color.Lerp(palette.stone, Color.black, .12f), .02f, .16f);
-            var bark = MakeTextured("PbrTerrain", new Color(.28f, .22f, .15f), 0, .15f);
+            var accent = biome == SurfaceBiome.Frozen ? Make(new Color(.64f, .8f, .87f), .04f, null, .48f) :
+                MakeTextured("PbrTerrain", Color.Lerp(Color.white, soil, .3f), .02f, .2f);
+            var dark = MakeTextured("PbrTerrain", Color.Lerp(Color.white, palette.stone, .22f), .02f, .16f);
+            var bark = MakeTextured("PbrTerrain", new Color(.52f, .4f, .28f), 0, .15f);
             var foliage = Make(Color.Lerp(palette.lowland, new Color(.18f, .4f, .13f), .52f));
             foliageCard=biome==SurfaceBiome.Temperate?MakeTextured("FoliageCutout",Color.white,0,.22f):null;
             var glow = Make(biome == SurfaceBiome.Volcanic ? new Color(1, .28f, .08f) : new Color(.13f, .9f, .85f), .1f,
@@ -588,7 +607,32 @@ namespace OrbitDominion
             root.transform.localRotation = Quaternion.Euler(0, build.rotation * 90, 0);
             SurfaceArchitecture.Build(build.kind, root.transform, buildPanel, buildAlloy, buildGlass,
                 buildConcrete, buildRoad, buildMarking, buildHazard);
-            buildVisuals[build.id] = root; return root;
+            buildVisuals[build.id] = root; UpdateSceneryVisibility(); return root;
+        }
+
+        Transform CreateSceneryRoot(string name, Vector3 position, float radius, float height)
+        {
+            var root = new GameObject("Surface scenery / " + name).transform;
+            root.SetParent(sceneRoot, false); root.localPosition = position;
+            scenery.Add((root, radius, height)); return root;
+        }
+
+        void UpdateSceneryVisibility()
+        {
+            // Scenery is a projection of saved lots; clearing a lot never edits terrain or save data.
+            foreach (var item in scenery)
+            {
+                Vector3 p = item.root.localPosition; bool clear = true;
+                foreach (var build in sandbox.Builds)
+                {
+                    if (build.planet != PlanetId || build.position.y > p.y + item.height ||
+                        build.position.y + SurfaceSandboxRules.StructureHeight(build.kind) < p.y - .5f) continue;
+                    Vector2 size = SurfaceSandboxRules.Footprint(build.kind, build.rotation);
+                    if (Mathf.Abs(p.x - build.position.x) < size.x * .5f + item.radius &&
+                        Mathf.Abs(p.z - build.position.z) < size.y * .5f + item.radius) { clear = false; break; }
+                }
+                item.root.gameObject.SetActive(clear);
+            }
         }
 
 
@@ -755,6 +799,8 @@ namespace OrbitDominion
         void BuildPlant(Vector3 p, System.Random random, Material trunk)
         {
             float height = 4.5f + (float)random.NextDouble() * 4;
+            var root = CreateSceneryRoot("Grove", p, 2.8f, height + 3);
+            p = Vector3.zero;
             var tree = new SurfaceMeshBuilder();
             Vector3 top = p + new Vector3(.35f, height, -.15f);
             tree.Beam(p - Vector3.up * .15f, top, .27f, trunk, .055f);
@@ -769,17 +815,19 @@ namespace OrbitDominion
                 tree.Beam(branchBase, crown, .1f, trunk, .025f);
                 tree.Beam(Vector3.Lerp(branchBase, crown, .55f), crown + new Vector3(.5f, .8f, -.4f), .045f, trunk, .012f);
                 if (foliageCard != null) for (int card = 0; card < 2; card++)
-                    VisualFactory.FoliageCard("Grove / photoreal leaf cluster", sceneRoot, crown,
+                    VisualFactory.FoliageCard("Grove / photoreal leaf cluster", root, crown,
                         new Vector2(4.1f, 3.6f), Quaternion.Euler(card * 24 - 8, angle * Mathf.Rad2Deg + card * 85, 0), foliageCard);
             }
-            tree.Finish(sceneRoot, "Grove / tapered trunk and roots");
-            if (foliageCard != null) VisualFactory.FoliageCard("Grove / crown", sceneRoot, top + Vector3.up * .5f,
+            tree.Finish(root, "Grove / tapered trunk and roots");
+            if (foliageCard != null) VisualFactory.FoliageCard("Grove / crown", root, top + Vector3.up * .5f,
                 new Vector2(3.7f, 3.3f), Quaternion.Euler(0, (float)random.NextDouble() * 180, 0), foliageCard);
         }
 
         void BuildFungus(Vector3 p, System.Random random, Material stem, Material cap)
         {
             float height = 2 + (float)random.NextDouble() * 4;
+            var root = CreateSceneryRoot("Fungal grove", p, 2.3f, height + 1);
+            p = Vector3.zero;
             var m = new SurfaceMeshBuilder();
             m.Lathe(p, new[] { Vector2.zero, new Vector2(.65f, 0), new Vector2(.3f, height * .3f),
                 new Vector2(.19f, height * .8f), new Vector2(.65f, height), new Vector2(0, height) }, stem);
@@ -790,7 +838,7 @@ namespace OrbitDominion
                 float a = i * Mathf.PI / 6;
                 m.Beam(p + Vector3.up * height, p + new Vector3(Mathf.Cos(a) * 1.95f, height - .18f, Mathf.Sin(a) * 1.95f), .025f, stem);
             }
-            m.Finish(sceneRoot, "Alien mycelium / ribbed fruiting body");
+            m.Finish(root, "Alien mycelium / ribbed fruiting body");
         }
 
         void BuildSpire(Vector3 p, System.Random random, Material baseMaterial, bool crystalline)
@@ -798,6 +846,8 @@ namespace OrbitDominion
             var m = new SurfaceMeshBuilder();
             float height = 2.5f + (float)random.NextDouble() * (crystalline ? 6 : 8);
             float width = crystalline ? height * .35f : height * .65f;
+            var root = CreateSceneryRoot("Outcrop", p, width, height);
+            p = Vector3.zero;
             m.Rock(p, new Vector3(width, height, width * .85f), random.Next(), baseMaterial, crystalline);
             for (int i = 0; i < 3; i++)
             {
@@ -806,7 +856,7 @@ namespace OrbitDominion
                 m.Rock(p + offset, new Vector3(width * .65f, height * (.2f + i * .11f), width * .6f),
                     random.Next(), baseMaterial, crystalline);
             }
-            m.Finish(sceneRoot, crystalline ? "Fractured glacial formation" : "Weathered bedrock formation");
+            m.Finish(root, crystalline ? "Fractured glacial formation" : "Weathered bedrock formation");
         }
 
         void BuildLandmarks(System.Random random, Material dark, Material accent, Material glow)
@@ -861,6 +911,16 @@ namespace OrbitDominion
             for (int i = 0; i < 12; i++)
             {
                 Vector3 p = Scatter(random, 20, 125); p.y = Ground(p.x, p.z) + (Biome == SurfaceBiome.Ocean ? .7f : 1.5f);
+                if (Biome != SurfaceBiome.Ocean)
+                {
+                    bool dry = true;
+                    for (int sample = 0; sample < 8; sample++)
+                    {
+                        float a = sample * Mathf.PI / 4;
+                        if (Terrain(p.x + Mathf.Cos(a) * 2.5f, p.z + Mathf.Sin(a) * 2.5f) < SurfaceRules.WaterLevel(Biome) + .4f) dry = false;
+                    }
+                    if (!dry) continue;
+                }
                 var creature = new GameObject(Biome == SurfaceBiome.Ocean ? "Pelagic glider" : "Native grazing life").transform;
                 creature.SetParent(sceneRoot, false); creature.localPosition = p;
                 creature.gameObject.AddComponent<SurfaceWanderer>().Initialize(p, i * 31, Biome == SurfaceBiome.Ocean ? .55f : .24f);
@@ -993,6 +1053,7 @@ namespace OrbitDominion
                 RenderSettings.ambientMode=previousAmbientMode;RenderSettings.ambientSkyColor=previousAmbientSky;
                 RenderSettings.ambientEquatorColor=previousAmbientEquator;RenderSettings.ambientGroundColor=previousAmbientGround;
                 RenderSettings.ambientIntensity=previousAmbientIntensity;
+                RenderSettings.ambientProbe=previousAmbientProbe;
             }
         }
     }

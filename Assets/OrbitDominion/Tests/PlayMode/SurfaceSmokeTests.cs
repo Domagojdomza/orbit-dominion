@@ -94,6 +94,7 @@ namespace OrbitDominion.Tests
             Assert.IsFalse(world.Surface.Active);
             var home = world.Worlds[0];
             var orbitAmbientMode=RenderSettings.ambientMode;
+            var orbitAmbientProbe=RenderSettings.ambientProbe;
             Color orbitSky=RenderSettings.ambientSkyColor,orbitEquator=RenderSettings.ambientEquatorColor,orbitGround=RenderSettings.ambientGroundColor;
             float orbitAmbientIntensity=RenderSettings.ambientIntensity;
             world.Player.transform.position = home.transform.position + Vector3.back * (home.Definition.radius + 180);
@@ -115,6 +116,13 @@ namespace OrbitDominion.Tests
             }
             Assert.IsTrue(world.Player.FlightDisabled);
             Assert.IsFalse(Object.FindAnyObjectByType<ChaseCamera>().enabled);
+            yield return new WaitForSeconds(.25f);
+            var sunlight = GameObject.Find("Solace / directional starlight").transform;
+            Assert.Less(Vector3.Angle(new Vector3(-.58f, -.36f, -.72f), sunlight.forward), .1f,
+                "Local daylight must match the surface sky, including direction vectors shorter than one metre");
+            var fillLight = new Color[1];
+            RenderSettings.ambientProbe.Evaluate(new[] { Vector3.back }, fillLight);
+            Assert.Greater(fillLight[0].maxColorComponent, .1f, "Surface Lit meshes need diffuse sky fill in shadow");
             float parkedShield = world.Combat.Player.Vitals.Shield;
             world.Combat.ApplyDamage(world.Combat.Player, 100, CombatFaction.Hostile);
             Assert.AreEqual(parkedShield, world.Combat.Player.Vitals.Shield);
@@ -149,6 +157,8 @@ namespace OrbitDominion.Tests
             Assert.AreEqual(orbitEquator,RenderSettings.ambientEquatorColor);
             Assert.AreEqual(orbitGround,RenderSettings.ambientGroundColor);
             Assert.AreEqual(orbitAmbientIntensity,RenderSettings.ambientIntensity);
+            for (int channel = 0; channel < 3; channel++) for (int coefficient = 0; coefficient < 9; coefficient++)
+                Assert.AreEqual(orbitAmbientProbe[channel, coefficient], RenderSettings.ambientProbe[channel, coefficient], .00001f);
             yield return null; yield return null;
             foreach (var mesh in roverMeshes) Assert.IsTrue(mesh == null, "Rover mesh leaked after leaving the surface");
             Assert.IsTrue(world.Session.Restore(serialized));
@@ -209,6 +219,27 @@ namespace OrbitDominion.Tests
             Assert.IsTrue(world.Surface.Active);
             Assert.AreEqual(2, world.Surface.LocalBuildCount);
             Assert.IsNotNull(GameObject.Find("Player build / Wall / solace-01/build/2"));
+            yield return null; yield return null;
+            Transform tree = null;
+            foreach (var node in world.GetComponentsInChildren<Transform>())
+                if (node.name == "Surface scenery / Grove" && Mathf.Abs(node.localPosition.x) < 110 && Mathf.Abs(node.localPosition.z) < 110)
+                { tree = node; break; }
+            Assert.IsNotNull(tree);
+            Vector3 treePosition = tree.localPosition;
+            world.Empire.State.Reward(100, 100);
+            Assert.IsTrue(world.Surface.TryPlaceBuild(SurfaceBuildKind.Foundation, treePosition, 0));
+            Assert.IsFalse(tree.gameObject.activeSelf, "Trees must not grow through a constructed lot");
+            var clearedLotSave = world.Session.Snapshot();
+            world.Surface.Launch(false); yield return null; yield return null;
+            Assert.IsTrue(world.Session.Restore(clearedLotSave));
+            Transform restoredTree = null;
+            foreach (var node in world.GetComponentsInChildren<Transform>(true))
+                if (node.name == "Surface scenery / Grove" && Vector3.Distance(node.localPosition, treePosition) < .01f)
+                { restoredTree = node; break; }
+            Assert.IsNotNull(restoredTree);
+            Assert.IsFalse(restoredTree.gameObject.activeSelf, "Saved lots must clear scenery on reconstruction");
+            Assert.IsTrue(world.Surface.TryRecycleBuild(treePosition));
+            Assert.IsTrue(restoredTree.gameObject.activeSelf, "Recycling the final overlapping lot restores its scenery");
         }
     }
 }

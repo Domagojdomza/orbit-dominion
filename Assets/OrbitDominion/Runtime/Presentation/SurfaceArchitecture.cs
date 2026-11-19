@@ -121,7 +121,7 @@ namespace OrbitDominion
                 m.Box(new(side * 1.72f, 2.1f, 2.22f), new(.85f, .95f, .05f), glass, .04f);
                 m.Box(new(side * 2.3f, 1.8f, 2.28f), new(.14f, 2.3f, .17f), metal, .03f);
             }
-            Airlock(m, new(0, .5f, 2.6f), wall, metal, glass, light);
+            Airlock(m, new(0, .5f, 2.55f), wall, metal, glass, light);
             RoofServices(m, new(0, 3.55f, -.5f), wall, metal, glass);
         }
 
