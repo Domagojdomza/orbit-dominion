@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 
 namespace OrbitDominion
 {
-    public sealed class PrototypeBootstrap : MonoBehaviour
+    public sealed partial class PrototypeBootstrap : MonoBehaviour
     {
         public FlightSettings settings;
         public InputActionAsset input;
@@ -71,7 +71,8 @@ namespace OrbitDominion
             bool systemCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-systemCapture")>=0;
             bool sandboxCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-sandboxCapture")>=0;
             bool walkCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-walkCapture")>=0;
-            bool capture=walkCapture||surfaceCapture||sectorCapture||combatCapture||systemCapture||sandboxCapture||System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-orbitCapture")>=0;
+            bool groundCapture=System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-groundCapture")>=0;
+            bool capture=groundCapture||walkCapture||surfaceCapture||sectorCapture||combatCapture||systemCapture||sandboxCapture||System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-orbitCapture")>=0;
             Discovery=gameObject.AddComponent<DiscoveryController>();
             Discovery.Initialize(Player,Worlds,discoverySettings,settings.galaxySeed,Beacon,null);
             var scanEffects=gameObject.AddComponent<ScanEffects>();scanEffects.Initialize(Discovery);
@@ -90,7 +91,7 @@ namespace OrbitDominion
             var beacon=VisualFactory.Shape("Navigation beacon",PrimitiveType.Sphere,transform,Beacon,Vector3.one*2,cyan);
             VisualFactory.Ring("Beacon orbit",beacon.transform,8,.16f,cyan);
             CreateAsteroids(metal);
-            if(capture) {gameObject.AddComponent<RuntimeMetrics>();Player.enabled=false;StartCoroutine(walkCapture?CaptureWalking():systemCapture?CaptureSystems():sandboxCapture?CaptureSandbox():surfaceCapture?CaptureSurface():sectorCapture?CaptureSector():combatCapture?CaptureCombat():Capture());}
+            if(capture) {gameObject.AddComponent<RuntimeMetrics>();Player.enabled=false;StartCoroutine(groundCapture?CaptureGround():walkCapture?CaptureWalking():systemCapture?CaptureSystems():sandboxCapture?CaptureSandbox():surfaceCapture?CaptureSurface():sectorCapture?CaptureSector():combatCapture?CaptureCombat():Capture());}
         }
 
         IEnumerator CaptureWalking()

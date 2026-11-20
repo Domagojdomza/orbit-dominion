@@ -81,12 +81,30 @@ namespace OrbitDominion
         {
             var c=world.Empire.State.Get(id);if(c==null||c.faction<2)return "";
             if(!world.Discovery.Catalog.HasDetails(id))return "";
-            if(world.Combat.LocalDefenders(id,CombatFaction.Union))return "Destroy local fighters, satellites and orbital command";
-            if(IsProtected(id))return "Planet protected";
-            return $"HOLD G WITHIN {world.sectorSettings.captureRange:0}m / CAPTURE {100*State.Get(id).capture/world.sectorSettings.captureSeconds:0}%";
+            int fighters=0,satellites=0,commands=0;
+            foreach(var a in world.Combat.Actors)if(a!=null&&a.Vitals.Alive&&a.HomePlanet==id&&a.Faction!=CombatFaction.Union)
+            {if(a.Role==CombatRole.Fighter)fighters++;else if(a.Role==CombatRole.Satellite)satellites++;else if(a.Role==CombatRole.Command)commands++;}
+            if(IsProtected(id))return "PLANET SHIELDED / Wait for protection to expire";
+            if(world.Combat.LocalDefenders(id,CombatFaction.Union))return $"1 / CLEAR ORBITAL DEFENSES · FIGHTERS {fighters} · SATELLITES {satellites} · COMMAND {commands}\nR selects an enemy · LMB fires · Keep your target in weapon range";
+            float range=Mathf.Max(0,Vector3.Distance(world.Player.transform.position,Planet(id).transform.position)-Planet(id).Definition.radius);
+            if(world.Player.Pulse)return "2 / DISENGAGE PULSE · P · Then approach the planet";
+            if(range>world.sectorSettings.captureRange)return $"2 / APPROACH TO {world.sectorSettings.captureRange:0} m · CURRENT {range:0} m";
+            return $"3 / HOLD G TO TAKE CONTROL · {100*State.Get(id).capture/world.sectorSettings.captureSeconds:0}%\nOr L to land, defeat the surface guards and capture their terminal";
+        }
+        public bool SurfaceCaptureTick(string id,bool held,bool inRange,bool groundDefenders,float dt)
+        {
+            if(world.Player.Paused||world.Surface?.Active!=true||!world.Surface.OnFoot||world.Surface.PlanetId!=id||
+                !world.Surface.GroundBattle.Suit.Alive||world.Empire.State.Get(id)?.faction!=3)return false;
+            bool ready=State.Capture(id,held,world.Discovery.Catalog.HasDetails(id),inRange,
+                groundDefenders||world.Combat.LocalDefenders(id,CombatFaction.Union),false,dt);
+            if(!ready)return false;
+            world.Combat.DisableMilitary(id);world.Empire.State.ChangeOwner(id,1);State.Get(id).provoked=false;
+            Message=Planet(id).Definition.title+" SECURED / UNION CONTROL · B to develop";
+            world.Session?.SaveNow();return true;
         }
         public bool CaptureTick(string id,bool held,float dt)
         {
+            if(world.Player.Paused||world.Surface?.Active==true)return false;
             var colony=world.Empire.State.Get(id);var planet=Planet(id);if(colony==null||colony.faction<2||planet==null)return false;
             bool ready=State.Capture(id,held,world.Discovery.Catalog.HasDetails(id),Vector3.Distance(world.Player.transform.position,planet.transform.position)-planet.Definition.radius<=world.sectorSettings.captureRange,world.Combat.LocalDefenders(id,CombatFaction.Union),world.Player.Pulse,dt);
             if(!ready)return false;

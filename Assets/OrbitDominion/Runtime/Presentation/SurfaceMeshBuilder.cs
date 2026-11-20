@@ -97,6 +97,22 @@ namespace OrbitDominion
             => Lathe(center, new[] { new Vector2(0, -height * .5f), new Vector2(radius, -height * .5f),
                 new Vector2(radius, height * .5f), new Vector2(0, height * .5f) }, material, sides, rotation);
 
+        public void Ellipsoid(Vector3 center, Vector3 size, Material material)
+        {
+            const int rings = 12, slices = 20;
+            Vector3 Point(float u, float v) => new(Mathf.Cos(u) * Mathf.Sin(v), Mathf.Cos(v), Mathf.Sin(u) * Mathf.Sin(v));
+            Vector3 Position(Vector3 p) => center + Vector3.Scale(p, size * .5f);
+            Vector3 Normal(Vector3 p) => new Vector3(p.x / size.x, p.y / size.y, p.z / size.z).normalized;
+            for (int y = 0; y < rings; y++) for (int x = 0; x < slices; x++)
+            {
+                float a = x * Mathf.PI * 2 / slices, b = (x + 1) * Mathf.PI * 2 / slices;
+                float v = y * Mathf.PI / rings, w = (y + 1) * Mathf.PI / rings;
+                Vector3 p0 = Point(a, v), p1 = Point(a, w), p2 = Point(b, w), p3 = Point(b, v);
+                Triangle(material, Position(p0), Position(p2), Position(p1), Normal(p0), Normal(p2), Normal(p1));
+                Triangle(material, Position(p0), Position(p3), Position(p2), Normal(p0), Normal(p3), Normal(p2));
+            }
+        }
+
         public void Beam(Vector3 a, Vector3 b, float radius, Material material, float endRadius = -1)
         {
             float length = Vector3.Distance(a, b);

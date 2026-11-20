@@ -16,6 +16,7 @@ namespace OrbitDominion
         public bool onFoot;
         public Vector3 parkedRoverPosition;
         public float parkedRoverYaw;
+        public SurfaceBattleSave battle;
         public List<string> collected = new();
         public SurfaceSandboxSave sandbox;
     }
@@ -125,7 +126,7 @@ namespace OrbitDominion
                     for (int i = 0; i < RelicsPerPlanet; i++) if (key == world.id + "/relic/" + i) known = true;
                 if (!known) return false;
             }
-            return SurfaceSandboxRules.ValidSave(save.sandbox, worlds);
+            return SurfaceSandboxRules.ValidSave(save.sandbox, worlds) && SurfaceBattleState.ValidSave(save.battle, worlds);
         }
 
         static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);

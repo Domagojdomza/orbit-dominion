@@ -141,6 +141,7 @@ namespace OrbitDominion
             explorer.SetParent(sceneRoot, false);
             BuildRover();
             BuildAstronaut();
+            BuildSurfaceBattle();
             lens.clearFlags = CameraClearFlags.SolidColor;
             lens.backgroundColor = SkyColor();
             lens.farClipPlane = 950;
@@ -174,6 +175,7 @@ namespace OrbitDominion
         {
             if (!Active) return;
             string name = planet.Definition.title;
+            ClearSurfaceBattle();
             planet = null;
             if (sceneRoot != null) Destroy(sceneRoot.gameObject);
             sceneRoot = null; explorer = null; astronaut = null;
@@ -211,6 +213,7 @@ namespace OrbitDominion
             onFoot = Active && OnFoot,
             parkedRoverPosition = Active && OnFoot ? parkedRover : Vector3.zero,
             parkedRoverYaw = Active && OnFoot ? parkedHeading : 0,
+            battle = battle.Snapshot(),
             collected = new List<string>(collected),
             sandbox = sandbox.Snapshot()
         };
@@ -219,6 +222,7 @@ namespace OrbitDominion
         {
             if (Active) Launch(false);
             collected.Clear();
+            battle.Restore(save?.battle);
             sandbox.Restore(save?.sandbox);
             if (save == null) return;
             foreach (string key in save.collected) collected.Add(key);
@@ -470,6 +474,8 @@ namespace OrbitDominion
             if (!Active) { if (world.Player.LandPressed) TryLand(); return; }
             if (world.Player.Paused) return;
             if (!world.Combat.Player.Vitals.Alive) { Launch(); return; }
+            TickSurfaceBattle(Time.deltaTime);
+            if (Recovering) return;
             var keys = Keyboard.current;
             if (keys == null) return;
             if (keys.lKey.wasPressedThisFrame) { Launch(); return; }
@@ -998,9 +1004,13 @@ namespace OrbitDominion
                 Vector3 p = center + new Vector3(Mathf.Sin(a) * 9, .9f, Mathf.Cos(a) * 9);
                 var citizen = new GameObject(faction == 2 ? "Ithacan citizen" : faction == 3 ? "Dominion colonist" : "Union explorer").transform;
                 citizen.SetParent(sceneRoot, false); citizen.localPosition = p;
-                citizen.gameObject.AddComponent<SurfaceWanderer>().Initialize(p, i * 77, .12f);
-                Shape("Suit", PrimitiveType.Capsule, citizen, new Vector3(0, .9f, 0), new Vector3(.6f, 1, .45f), accent);
-                Shape("Visor", PrimitiveType.Sphere, citizen, new Vector3(0, 1.9f, 0), Vector3.one * .58f, light);
+                p.y = Ground(p.x, p.z); citizen.localPosition = p;
+                var inhabitant = citizen.gameObject.AddComponent<SurfaceAstronaut>();
+                SurfaceSpecies species = PlanetId == "veil-03" ? SurfaceSpecies.Ithacan : PlanetId.StartsWith("cinder-") ? SurfaceSpecies.Varkesh : SurfaceSpecies.Human;
+                inhabitant.Build(accent, structure, glazing, Make(species == SurfaceSpecies.Ithacan ? new Color(.25f,.5f,.42f) : new Color(.5f,.27f,.17f)), light, false, species);
+                inhabitant.Pose(0, .1f);
+                contacts.Add(new SurfaceContact {root=citizen,model=inhabitant,vitals=new VitalState(100,0),home=p,
+                    title=species==SurfaceSpecies.Ithacan?"ITHACAN / NEUTRAL CIVILIAN":species==SurfaceSpecies.Varkesh?"VARKESH / CIVILIAN":"UNION / CIVILIAN"});
             }
         }
 

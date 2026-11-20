@@ -70,9 +70,9 @@ namespace OrbitDominion
 
         public bool TryInteract()
         {
-            if (!Active || world.Player.Paused || buildMode) return false;
+            if (!Active || world.Player.Paused || buildMode || Recovering) return false;
             if (!OnFoot) return TryExitRover();
-            if (FlatDistance(explorerLocal, ShipEntrance) < 2.5f) { Launch(); return true; }
+            if (FlatDistance(explorerLocal, ShipEntrance) < 2.5f) { battle.Suit.Reset(); Launch(); return true; }
             if (FlatDistance(explorerLocal, parkedRover) >= 5.2f) return false;
             OnFoot = false; astronaut.gameObject.SetActive(false);
             explorerLocal = parkedRover; rover = new RoverMotion(parkedHeading, 0);
@@ -134,10 +134,14 @@ namespace OrbitDominion
         void UpdateWalking(Keyboard keys, Vector2 look)
         {
             float dt = Mathf.Min(Time.deltaTime, .1f);
+            var mouse = Mouse.current;
+            aiming = !buildMode && (mouse?.rightButton.isPressed == true || mouse?.leftButton.isPressed == true || firingPose > 0);
+            sprinting = keys.leftShiftKey.isPressed && !aiming && !buildMode;
             walkCameraYaw = Mathf.Repeat(walkCameraYaw + look.x * .14f, 360);
             Vector2 input = buildMode ? Vector2.zero : new Vector2((keys.dKey.isPressed ? 1 : 0) - (keys.aKey.isPressed ? 1 : 0),
                 (keys.wKey.isPressed ? 1 : 0) - (keys.sKey.isPressed ? 1 : 0));
-            walk = SurfaceWalkRules.Step(walk, input, walkCameraYaw, keys.leftShiftKey.isPressed, dt);
+            walk = SurfaceWalkRules.Step(walk, aiming ? input * .6f : input, walkCameraYaw, sprinting, dt);
+            if (aiming) walk = new WalkMotion(walk.velocity, Mathf.MoveTowardsAngle(walk.heading, walkCameraYaw, dt * 720));
             Vector3 start = explorerLocal;
             Vector3 move = walk.velocity * dt;
             int steps = Mathf.Max(1, Mathf.CeilToInt(move.magnitude / .15f));
@@ -149,8 +153,14 @@ namespace OrbitDominion
             float actualSpeed = dt > 0 ? FlatDistance(start, explorerLocal) / dt : 0;
             if (actualSpeed < .01f) walk = new WalkMotion(Vector3.zero, walk.heading);
             if (buildMode) HandleBuildInput(keys);
-            astronaut.Pose(actualSpeed, dt);
             UpdateCamera(false);
+            Vector3 localVelocity = astronaut.transform.InverseTransformDirection(walk.velocity);
+            if (actualSpeed < .01f) localVelocity = Vector3.zero;
+            Vector3 lateral = astronaut.transform.right * .115f;
+            astronaut.Pose(localVelocity, dt, aiming, pitch, battle.ReloadRemaining > 0,
+                FootFloor(explorerLocal.x - lateral.x, explorerLocal.z - lateral.z) - explorerLocal.y,
+                FootFloor(explorerLocal.x + lateral.x, explorerLocal.z + lateral.z) - explorerLocal.y);
+            if (!buildMode) HandleRifleInput(keys);
         }
 
         bool WalkStep(Vector3 step)
@@ -167,7 +177,8 @@ namespace OrbitDominion
             astronaut.transform.localRotation = Quaternion.Euler(0, walk.heading, 0);
             Vector3 focus = explorerLocal + Vector3.up * 1.5f;
             Vector3 direction = Quaternion.Euler(Mathf.Clamp(pitch, -25, 55), walkCameraYaw, 0) * Vector3.forward;
-            Vector3 desired = focus - direction * 5.6f + Vector3.up * .6f;
+            Vector3 shoulder = Quaternion.Euler(0, walkCameraYaw, 0) * Vector3.right * (aiming ? .65f : .32f);
+            Vector3 desired = focus - direction * (aiming ? 2.7f : 5.2f) + Vector3.up * (aiming ? .15f : .6f) + shoulder;
             Vector3 localCamera = sceneRoot.InverseTransformPoint(lens.transform.position);
             desired = immediate ? desired : Vector3.Lerp(localCamera, desired, 1 - Mathf.Exp(-12 * Time.deltaTime));
             Vector3 delta = desired - focus;
@@ -193,9 +204,9 @@ namespace OrbitDominion
                 safe = sample;
             }
             lens.transform.position = sceneRoot.TransformPoint(safe);
-            Vector3 target = sceneRoot.TransformPoint(focus + direction * .8f);
+            Vector3 target = sceneRoot.TransformPoint(aiming ? focus + direction * 20 : focus + direction * .8f);
             lens.transform.rotation = Quaternion.LookRotation(target - lens.transform.position, Vector3.up);
-            lens.fieldOfView = 65;
+            lens.fieldOfView = immediate ? (aiming ? 52 : 65) : Mathf.Lerp(lens.fieldOfView, aiming ? 52 : 65, 1 - Mathf.Exp(-12 * Time.deltaTime));
         }
     }
 }
