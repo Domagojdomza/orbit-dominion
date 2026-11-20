@@ -48,6 +48,21 @@ namespace OrbitDominion
                 yield return new WaitForSeconds(.7f);
                 ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath, "../ground-astronaut.png"));
                 yield return new WaitForSeconds(.5f);
+                // Extra suit inspection poses belong only to this isolated QA session.
+                var suit = astronaut.GetComponent<SurfaceAstronaut>();
+                view = astronaut.position + new Vector3(-1.6f,1.5f,-2.8f);
+                Camera.main.transform.SetPositionAndRotation(view,Quaternion.LookRotation(astronaut.position+Vector3.up*1.04f-view));
+                yield return new WaitForSeconds(.4f);
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../astronaut-rear.png"));
+                yield return new WaitForSeconds(.4f);
+                view = astronaut.position + new Vector3(2.3f,1.6f,2.3f);
+                Camera.main.transform.SetPositionAndRotation(view,Quaternion.LookRotation(astronaut.position+Vector3.up*1.08f-view));
+                for(int pose=0;pose<25;pose++){suit.Pose(Vector3.zero,.02f,true,0,false,0,0);yield return null;}
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../astronaut-aim.png"));
+                yield return new WaitForSeconds(.4f);
+                for(int pose=0;pose<18;pose++){suit.Pose(new Vector3(0,0,4.5f),.02f,false,0,false,0,0);yield return null;}
+                ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Application.dataPath,"../astronaut-stride.png"));
+                yield return new WaitForSeconds(.4f);
                 Surface.Launch(false); hudRoot.style.display = DisplayStyle.Flex; Surface.enabled = true;
                 string id = "cinder-01"; Combat.DisableMilitary(id);
                 Discovery.Catalog.Detect(id); Discovery.Catalog.CompleteScan(id);

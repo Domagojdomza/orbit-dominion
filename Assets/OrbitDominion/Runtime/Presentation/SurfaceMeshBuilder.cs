@@ -97,9 +97,8 @@ namespace OrbitDominion
             => Lathe(center, new[] { new Vector2(0, -height * .5f), new Vector2(radius, -height * .5f),
                 new Vector2(radius, height * .5f), new Vector2(0, height * .5f) }, material, sides, rotation);
 
-        public void Ellipsoid(Vector3 center, Vector3 size, Material material)
+        public void Ellipsoid(Vector3 center, Vector3 size, Material material, int rings = 12, int slices = 20)
         {
-            const int rings = 12, slices = 20;
             Vector3 Point(float u, float v) => new(Mathf.Cos(u) * Mathf.Sin(v), Mathf.Cos(v), Mathf.Sin(u) * Mathf.Sin(v));
             Vector3 Position(Vector3 p) => center + Vector3.Scale(p, size * .5f);
             Vector3 Normal(Vector3 p) => new Vector3(p.x / size.x, p.y / size.y, p.z / size.z).normalized;
@@ -110,6 +109,63 @@ namespace OrbitDominion
                 Vector3 p0 = Point(a, v), p1 = Point(a, w), p2 = Point(b, w), p3 = Point(b, v);
                 Triangle(material, Position(p0), Position(p2), Position(p1), Normal(p0), Normal(p2), Normal(p1));
                 Triangle(material, Position(p0), Position(p3), Position(p2), Normal(p0), Normal(p3), Normal(p2));
+            }
+        }
+
+        // Smooth elliptical garment sections: (height, half-width, half-depth, depth offset).
+        public void SuitSection(Vector3 origin, Vector4[] profile, Material material, float wrinkles = 0)
+        {
+            const int sides = 32, subdivisions = 4;
+            int rows = (profile.Length - 1) * subdivisions + 1;
+            var points = new Vector3[rows, sides];
+            var normals = new Vector3[rows, sides];
+            for (int r = 0; r < rows; r++)
+            {
+                float t = r / (float)subdivisions; int k = Mathf.Min((int)t, profile.Length - 2); t -= k;
+                Vector4 a = profile[Mathf.Max(0, k - 1)], b = profile[k], c = profile[k + 1], d = profile[Mathf.Min(profile.Length - 1, k + 2)];
+                Vector4 p = .5f * (2*b + (c-a)*t + (2*a-5*b+4*c-d)*t*t + (-a+3*b-3*c+d)*t*t*t);
+                // Constant-radius cuffs must not bulge through neighboring fastening bands.
+                p.y=Mathf.Clamp(p.y,Mathf.Min(b.y,c.y),Mathf.Max(b.y,c.y));
+                p.z=Mathf.Clamp(p.z,Mathf.Min(b.z,c.z),Mathf.Max(b.z,c.z));
+                for (int s = 0; s < sides; s++)
+                {
+                    float angle = s * Mathf.PI * 2 / sides;
+                    float fold = wrinkles * Mathf.Sin(r * Mathf.PI / (rows - 1)) *
+                        (Mathf.Sin(p.x * 92 + Mathf.Sin(angle * 3) * 1.7f) * .65f + Mathf.Sin(angle * 7 + p.x * 41) * .35f);
+                    points[r,s] = origin + new Vector3(Mathf.Cos(angle) * Mathf.Max(.005f,p.y+fold), p.x,
+                        Mathf.Sin(angle) * Mathf.Max(.005f,p.z+fold) + p.w);
+                }
+            }
+            for (int r = 0; r < rows; r++) for (int s = 0; s < sides; s++)
+                normals[r,s] = Vector3.Cross(points[Mathf.Min(rows-1,r+1),s]-points[Mathf.Max(0,r-1),s],
+                    points[r,(s+1)%sides]-points[r,(s+sides-1)%sides]).normalized;
+            for (int r = 0; r < rows-1; r++) for (int s = 0; s < sides; s++)
+            {
+                int n = (s+1)%sides;
+                Triangle(material,points[r,s],points[r+1,s],points[r+1,n],normals[r,s],normals[r+1,s],normals[r+1,n]);
+                Triangle(material,points[r,s],points[r+1,n],points[r,n],normals[r,s],normals[r+1,n],normals[r,n]);
+            }
+            for (int s = 0; s < sides; s++)
+            {
+                int n = (s+1)%sides;
+                Flat(material,origin+new Vector3(0,profile[0].x,profile[0].w),points[0,s],points[0,n]);
+                Flat(material,origin+new Vector3(0,profile[^1].x,profile[^1].w),points[rows-1,n],points[rows-1,s]);
+            }
+        }
+
+        // Curved front patch on a helmet, following its shell instead of adding an eye-shaped sphere.
+        public void VisorPatch(Vector3 center, Vector3 radii, float yaw, float low, float high, Material material)
+        {
+            const int columns = 28, rows = 12;
+            Vector3 Point(float u,float v) => new(Mathf.Sin(u)*Mathf.Cos(v), Mathf.Sin(v), Mathf.Cos(u)*Mathf.Cos(v));
+            for (int y=0;y<rows;y++) for(int x=0;x<columns;x++)
+            {
+                float a=Mathf.Lerp(-yaw,yaw,x/(float)columns)*Mathf.Deg2Rad, b=Mathf.Lerp(-yaw,yaw,(x+1f)/columns)*Mathf.Deg2Rad;
+                float c=Mathf.Lerp(low,high,y/(float)rows)*Mathf.Deg2Rad, d=Mathf.Lerp(low,high,(y+1f)/rows)*Mathf.Deg2Rad;
+                Vector3[] v={Point(a,c),Point(b,c),Point(b,d),Point(a,d)};
+                Vector3 P(int i)=>center+Vector3.Scale(v[i],radii);
+                Vector3 N(int i)=>new Vector3(v[i].x/radii.x,v[i].y/radii.y,v[i].z/radii.z).normalized;
+                Triangle(material,P(0),P(1),P(2),N(0),N(1),N(2)); Triangle(material,P(0),P(2),P(3),N(0),N(2),N(3));
             }
         }
 

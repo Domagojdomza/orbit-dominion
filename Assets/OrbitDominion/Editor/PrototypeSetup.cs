@@ -79,6 +79,7 @@ namespace OrbitDominion.Editor
             EnsurePbrMaterial("PbrRoad","RoadAsphaltAlbedo","RoadAsphaltNormal",.02f,.17f,2.4f);
             EnsurePbrMaterial("PbrTerrain","TerrainMicroAlbedo","TerrainMicroNormal",.01f,.2f,2.8f);
             EnsureFoliageMaterial();
+            AstronautAssets.Ensure();
             const string volumePath="Assets/OrbitDominion/Settings/CinematicVolume.asset";
             var profile=AssetDatabase.LoadAssetAtPath<VolumeProfile>(volumePath);
             if(profile==null)

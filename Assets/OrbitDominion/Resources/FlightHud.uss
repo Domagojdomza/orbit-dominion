@@ -25,6 +25,7 @@ Button { background-color: rgb(19,44,60); color: rgb(204,235,243); height: 42px;
 .surface-objective { position: absolute; top: 105px; left: 38px; max-width: 520px; font-size: 15px; color: rgb(240,227,191); background-color: rgba(4,14,25,.87); padding: 14px; white-space: normal; }
 .surface-suit { position: absolute; bottom: 88px; right: 38px; font-size: 15px; color: rgb(200,239,255); background-color: rgba(4,14,25,.87); padding: 14px; }
 .ground-reticle { position: absolute; top: 50%; left: 50%; width: 32px; height: 32px; margin-left: -16px; margin-top: -16px; font-size: 27px; -unity-text-align: middle-center; color: white; }
+.ground-aim-dot { position: absolute; top: 50%; left: 50%; width: 7px; height: 7px; margin-left: -3.5px; margin-top: -3.5px; border-radius: 4px; border-width: 1px; border-color: rgb(12,20,27); background-color: white; }
 .ground-marker { position: absolute; width: 200px; font-size: 12px; -unity-text-align: middle-center; background-color: rgba(4,14,25,.6); padding: 4px; }
 .surface-message { position: absolute; bottom: 86px; left: 38px; max-width: 850px; white-space: normal; font-size: 15px; color: rgb(222,245,236); background-color: rgba(4,14,25,.85); padding: 14px; }
 .surface-controls { position: absolute; bottom: 24px; left: 38px; right: 38px; font-size: 12px; color: rgb(158,214,226); background-color: rgba(4,14,25,.88); padding: 10px; }

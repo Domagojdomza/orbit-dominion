@@ -7,7 +7,7 @@ namespace OrbitDominion
     public sealed class SurfaceHud : MonoBehaviour
     {
         PrototypeBootstrap world;
-        VisualElement root, panel;
+        VisualElement root, panel, aimDot;
         Label title, biome, signal, total, message, controls, objective, suit, reticle, command;
         readonly System.Collections.Generic.List<Label> contacts = new();
         bool visible;
@@ -26,6 +26,8 @@ namespace OrbitDominion
             objective = Add("", "surface-objective");
             suit = Add("", "surface-suit");
             reticle = Add("+", "ground-reticle");
+            aimDot = new VisualElement { pickingMode = PickingMode.Ignore };
+            aimDot.AddToClassList("ground-aim-dot"); panel.Add(aimDot);
             command = Add("", "ground-marker");
             panel.style.display = DisplayStyle.None;
         }
@@ -60,8 +62,13 @@ namespace OrbitDominion
             suit.text = $"SHIELD {vital.Shield:0}/60   HEALTH {vital.Hull:0}/100\n" + world.Surface.GroundWeaponHint;
             suit.style.color = world.Surface.UnderFire ? new Color(1,.32f,.2f) : new Color(.8f,.94f,1);
             reticle.style.display = onFoot && !world.Surface.BuildMode && !world.Player.Paused && !world.Surface.Recovering ? DisplayStyle.Flex : DisplayStyle.None;
-            reticle.text = world.Surface.HitConfirmed ? "×" : "+";
-            reticle.style.color = world.Surface.HitConfirmed ? new Color(1,.45f,.15f) : Color.white;
+            reticle.text = world.Surface.GroundAimBlocked || world.Surface.HitConfirmed ? "×" : world.Surface.Aiming ? "" : "+";
+            aimDot.style.display = world.Surface.Aiming && !world.Player.Paused && !world.Surface.Recovering &&
+                !world.Surface.GroundAimBlocked && !world.Surface.HitConfirmed ? DisplayStyle.Flex : DisplayStyle.None;
+            aimDot.style.backgroundColor = world.Surface.GroundAimHostile ? new Color(1,.38f,.2f) : Color.white;
+            reticle.style.color = world.Surface.GroundAimBlocked ? new Color(1,.7f,.2f) :
+                world.Surface.HitConfirmed || world.Surface.GroundAimHostile ? new Color(1,.38f,.2f) : Color.white;
+            if(world.Surface.GroundAimBlocked) suit.text += "\nMUZZLE BLOCKED / Step clear of cover";
             UpdateMarkers();
             message.text = world.Player.Paused ? "EXPEDITION PAUSED / ESC to resume" : world.Surface.Message;
             controls.text = world.Player.Paused ? "ESC / RESUME EXPEDITION" :

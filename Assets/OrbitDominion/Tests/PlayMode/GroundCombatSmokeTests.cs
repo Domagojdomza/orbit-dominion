@@ -66,6 +66,63 @@ namespace OrbitDominion.Tests
             yield return new WaitForSeconds(1.8f); Assert.AreEqual(18, s.GroundBattle.Rounds);
         }
 
+        [UnityTest] public IEnumerator ShoulderAimStrafesWithoutTurningAwayAndHipFireDoesNotZoom()
+        {
+            yield return Load(); var world=Object.FindAnyObjectByType<PrototypeBootstrap>();var s=world.Surface;
+            s.Enter(world.Worlds[0],true);s.SetExplorerPose(new Vector3(-9,0,-18),0,0);
+            InputSystem.QueueStateEvent(mouse,new MouseState{buttons=2});
+            yield return new WaitForSeconds(.55f);
+            Assert.IsTrue(s.Aiming);Assert.Less(Camera.main.fieldOfView,55);
+            Vector3 before=s.ExplorerLocal;
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState(Key.D));
+            yield return new WaitForSeconds(.3f);
+            var person=GameObject.Find("Wayfarer astronaut").transform;
+            Assert.Greater(s.ExplorerLocal.x,before.x+.1f);
+            Assert.Less(Mathf.Abs(Mathf.DeltaAngle(person.eulerAngles.y,Camera.main.transform.eulerAngles.y)),2,
+                "Aimed strafing keeps the body facing the reticle");
+            var muzzle=GameObject.Find("ARC-18 / muzzle").transform;
+            Assert.Less(Vector3.Angle(muzzle.forward,s.GroundAimPoint-muzzle.position),2,
+                "The visible barrel must converge on the selected camera point");
+            InputSystem.QueueStateEvent(keyboard,new KeyboardState());
+            int shots=s.GroundShots;InputSystem.QueueStateEvent(mouse,new MouseState{buttons=1});
+            yield return new WaitForSeconds(.6f);
+            Assert.IsFalse(s.Aiming);Assert.Greater(s.GroundShots,shots);Assert.Greater(Camera.main.fieldOfView,63);
+        }
+
+        [UnityTest] public IEnumerator SuitGeometryHasUsableNormalsAndReleasesItsMeshes()
+        {
+            var root=new GameObject("Suit geometry QA");var mat=VisualFactory.Lit(Color.gray);
+            var meshes=new System.Collections.Generic.List<Mesh>();
+            try
+            {
+                var model=root.AddComponent<SurfaceAstronaut>();model.Build(mat,mat,mat,mat,mat);
+                foreach(var filter in root.GetComponentsInChildren<MeshFilter>())
+                {
+                    var mesh=filter.sharedMesh;meshes.Add(mesh);
+                    Assert.AreEqual(mesh.vertexCount,mesh.tangents.Length);
+                    var points=mesh.vertices;var normals=mesh.normals;var indices=mesh.triangles;
+                    foreach(var tangent in mesh.tangents)Assert.IsTrue(float.IsFinite(tangent.x)&&float.IsFinite(tangent.y)&&float.IsFinite(tangent.z));
+                    for(int t=0;t<indices.Length;t+=3)
+                    {
+                        int a=indices[t],b=indices[t+1],c=indices[t+2];var face=Vector3.Cross(points[b]-points[a],points[c]-points[a]);
+                        Assert.Greater(face.sqrMagnitude,1e-12f,mesh.name);
+                        Assert.Greater(Vector3.Dot(face,normals[a]+normals[b]+normals[c]),0,"Inverted suit face: "+mesh.name);
+                    }
+                }
+                for(int angle=0;angle<360;angle+=45)
+                {
+                    root.transform.rotation=Quaternion.Euler(0,angle,0);
+                    model.Pose(new Vector3(2,0,3),.1f,true,-20,false,.12f,-.06f);
+                    model.AlignRifle(root.transform.TransformPoint(new Vector3(0,3,30)));
+                    foreach(var bone in root.GetComponentsInChildren<Transform>())
+                        Assert.IsTrue(float.IsFinite(bone.position.x)&&float.IsFinite(bone.position.y)&&float.IsFinite(bone.position.z));
+                }
+            }
+            finally{Object.Destroy(root);Object.Destroy(mat);}
+            yield return null;yield return null;
+            foreach(var mesh in meshes)Assert.IsTrue(mesh==null,"Suit mesh leaked on destruction");
+        }
+
         [UnityTest] public IEnumerator WallsStopShotsAndNeutralCitizensAreProtected()
         {
             yield return Load(); var world = Object.FindAnyObjectByType<PrototypeBootstrap>(); var s = world.Surface;

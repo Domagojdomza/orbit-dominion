@@ -5,11 +5,11 @@ namespace OrbitDominion
     public enum SurfaceSpecies { Human, Ithacan, Varkesh }
 
     // Metre-scale articulated anatomy; planted leg poses and two-handed rifle grips.
-    public sealed class SurfaceAstronaut : MonoBehaviour
+    public sealed partial class SurfaceAstronaut : MonoBehaviour
     {
         readonly Transform[] thighs = new Transform[2], knees = new Transform[2], boots = new Transform[2], arms = new Transform[2], elbows = new Transform[2];
         Transform torso, weapon, muzzle;
-        float phase, stride, aimBlend, recoil, breathing;
+        float phase, stride, aimBlend, recoil, breathing, reloadBlend;
         public Vector3 Muzzle => muzzle != null ? muzzle.position : transform.position + transform.forward + Vector3.up * 1.4f;
         public bool Armed => weapon != null;
         Transform Joint(string title, Transform parent, Vector3 at)
@@ -19,6 +19,13 @@ namespace OrbitDominion
         public void Build(Material suit, Material seals, Material visor, Material accent, Material lamps,
             bool armed = true, SurfaceSpecies species = SurfaceSpecies.Human)
         {
+            if (species == SurfaceSpecies.Human)
+            {
+                BuildExpeditionSuit(suit, seals, visor, accent, lamps);
+                if (armed) BuildRifle(seals, suit, lamps);
+                Pose(0, 0);
+                return;
+            }
             torso = Joint("Explorer / torso", transform, Vector3.zero);
             var body = new SurfaceMeshBuilder();
             body.Ellipsoid(new Vector3(0, 1.29f, 0), new Vector3(.49f, .62f, .32f), suit);
@@ -91,6 +98,7 @@ namespace OrbitDominion
         }
         void BuildRifle(Material metal, Material body, Material lamp)
         {
+            body = Resources.Load<Material>("AstronautHardware") ?? body;
             weapon = Joint("Wayfarer / ARC-18 rifle", torso, new Vector3(.16f, 1.22f, .18f));
             var gun = new SurfaceMeshBuilder();
             gun.Box(new Vector3(0, 0, .12f), new Vector3(.11f, .14f, .43f), metal, .022f);
@@ -112,6 +120,7 @@ namespace OrbitDominion
             float speed = localVelocity.magnitude;
             stride = Mathf.MoveTowards(stride, Mathf.Clamp01(speed / 5.4f), dt * 4);
             aimBlend = Mathf.MoveTowards(aimBlend, aiming ? 1 : 0, dt * 7);
+            reloadBlend = Mathf.MoveTowards(reloadBlend, reloading ? 1 : 0, dt * 4);
             recoil = Mathf.MoveTowards(recoil, 0, dt * 9); breathing += dt; phase += speed * dt * 3.5f;
             torso.localPosition = Vector3.up * (Mathf.Sin(phase * 2) * .018f * stride + Mathf.Sin(breathing * 1.9f) * .004f);
             torso.localRotation = Quaternion.Euler(stride * 7 * (1 - aimBlend), Mathf.Sin(phase) * stride * 3 * (1 - aimBlend), -localVelocity.x * .5f);
@@ -129,9 +138,25 @@ namespace OrbitDominion
             }
             if (!Armed) return;
             weapon.localPosition = Vector3.Lerp(new Vector3(.16f, 1.18f, .14f), new Vector3(.18f, 1.39f, .12f), aimBlend) - Vector3.forward * recoil * .055f;
-            weapon.localRotation = Quaternion.Euler(Mathf.Lerp(24, aimPitch, aimBlend) - recoil * 4, reloading ? -32 : 0, reloading ? -34 : -5 * (1 - aimBlend));
-            SolveLimb(arms[1], elbows[1], weapon.TransformPoint(new Vector3(0, -.115f, .05f)), .30f, .31f, transform.right - transform.forward);
-            SolveLimb(arms[0], elbows[0], weapon.TransformPoint(new Vector3(-.015f, -.055f, reloading ? .16f : .35f)), .30f, .31f, -transform.right - transform.forward);
+            weapon.localRotation = Quaternion.Euler(Mathf.Lerp(24, aimPitch, aimBlend) - recoil * 4, -32 * reloadBlend, Mathf.Lerp(-5 * (1 - aimBlend), -34, reloadBlend));
+            PoseRifleHands();
+        }
+        // Presentation follows the same camera-selected point used by the muzzle trace.
+        public void AlignRifle(Vector3 worldTarget)
+        {
+            if(!Armed || reloadBlend>.05f)return;
+            Vector3 direction=worldTarget-weapon.position;
+            if(direction.sqrMagnitude<.01f)return;
+            weapon.rotation=Quaternion.LookRotation(direction,transform.up)*Quaternion.Euler(-recoil*2,0,0);
+            PoseRifleHands();
+        }
+        void PoseRifleHands()
+        {
+            Vector3 rightGrip = suitHands[1] != null ? new Vector3(.06f,-.105f,.05f) : new Vector3(0,-.115f,.05f);
+            Vector3 leftGrip = suitHands[0] != null ? new Vector3(-.045f,-.055f,Mathf.Lerp(.29f,.16f,reloadBlend)) : new Vector3(-.015f,-.055f,Mathf.Lerp(.35f,.16f,reloadBlend));
+            SolveLimb(arms[1], elbows[1], weapon.TransformPoint(rightGrip), .30f, .31f, transform.right - transform.forward);
+            SolveLimb(arms[0], elbows[0], weapon.TransformPoint(leftGrip), .30f, .31f, -transform.right - transform.forward);
+            for (int i=0;i<2;i++) if(suitHands[i]!=null) suitHands[i].rotation=weapon.rotation;
         }
         static void SolveLimb(Transform upper, Transform lower, Vector3 target, float a, float b, Vector3 bend)
         {

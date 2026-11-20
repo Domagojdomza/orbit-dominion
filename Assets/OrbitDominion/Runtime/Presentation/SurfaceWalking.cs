@@ -11,7 +11,7 @@ namespace OrbitDominion
         SurfaceAstronaut astronaut;
         WalkMotion walk;
         Vector3 parkedRover;
-        float parkedHeading, walkCameraYaw;
+        float parkedHeading, walkCameraYaw, aimCameraBlend;
         public bool OnFoot { get; private set; }
         public float WalkingSpeed => walk.velocity.magnitude;
         public Vector3 ParkedRoverLocal => OnFoot ? parkedRover : explorerLocal;
@@ -42,11 +42,11 @@ namespace OrbitDominion
         {
             var root = new GameObject("Wayfarer astronaut"); root.transform.SetParent(sceneRoot, false);
             astronaut = root.AddComponent<SurfaceAstronaut>();
-            astronaut.Build(Make(new Color(.77f, .81f, .79f), .12f, null, .38f),
-                Make(new Color(.055f, .075f, .09f), .12f, null, .24f),
-                Make(new Color(.07f, .16f, .21f), .8f, null, .93f),
-                Make(new Color(.93f, .31f, .08f), .22f, null, .45f),
-                Make(new Color(.1f, .7f, .85f), .2f, new Color(.1f, 1.3f, 1.5f)));
+            astronaut.Build(MakeTextured("AstronautCloth",new Color(.84f,.83f,.78f),0,.22f),
+                Make(new Color(.07f, .085f, .095f), .03f, null, .19f),
+                Make(new Color(.42f, .29f, .12f), .86f, null, .94f),
+                Make(new Color(.56f, .20f, .065f), .16f, null, .26f),
+                Make(new Color(.08f, .42f, .48f), .15f, new Color(.07f, .65f, .75f)));
             astronaut.gameObject.SetActive(false);
         }
 
@@ -135,13 +135,14 @@ namespace OrbitDominion
         {
             float dt = Mathf.Min(Time.deltaTime, .1f);
             var mouse = Mouse.current;
-            aiming = !buildMode && (mouse?.rightButton.isPressed == true || mouse?.leftButton.isPressed == true || firingPose > 0);
-            sprinting = keys.leftShiftKey.isPressed && !aiming && !buildMode;
+            aiming = !buildMode && mouse?.rightButton.isPressed == true;
+            weaponRaised = !buildMode && (aiming || mouse?.leftButton.isPressed == true || firingPose > 0);
+            sprinting = keys.leftShiftKey.isPressed && !weaponRaised && !buildMode;
             walkCameraYaw = Mathf.Repeat(walkCameraYaw + look.x * .14f, 360);
             Vector2 input = buildMode ? Vector2.zero : new Vector2((keys.dKey.isPressed ? 1 : 0) - (keys.aKey.isPressed ? 1 : 0),
                 (keys.wKey.isPressed ? 1 : 0) - (keys.sKey.isPressed ? 1 : 0));
             walk = SurfaceWalkRules.Step(walk, aiming ? input * .6f : input, walkCameraYaw, sprinting, dt);
-            if (aiming) walk = new WalkMotion(walk.velocity, Mathf.MoveTowardsAngle(walk.heading, walkCameraYaw, dt * 720));
+            if (weaponRaised) walk = new WalkMotion(walk.velocity, Mathf.MoveTowardsAngle(walk.heading, walkCameraYaw, dt * 720));
             Vector3 start = explorerLocal;
             Vector3 move = walk.velocity * dt;
             int steps = Mathf.Max(1, Mathf.CeilToInt(move.magnitude / .15f));
@@ -157,10 +158,10 @@ namespace OrbitDominion
             Vector3 localVelocity = astronaut.transform.InverseTransformDirection(walk.velocity);
             if (actualSpeed < .01f) localVelocity = Vector3.zero;
             Vector3 lateral = astronaut.transform.right * .115f;
-            astronaut.Pose(localVelocity, dt, aiming, pitch, battle.ReloadRemaining > 0,
+            astronaut.Pose(localVelocity, dt, weaponRaised, pitch, battle.ReloadRemaining > 0,
                 FootFloor(explorerLocal.x - lateral.x, explorerLocal.z - lateral.z) - explorerLocal.y,
                 FootFloor(explorerLocal.x + lateral.x, explorerLocal.z + lateral.z) - explorerLocal.y);
-            if (!buildMode) HandleRifleInput(keys);
+            if (!buildMode) { UpdateRifleAim(); HandleRifleInput(keys); }
         }
 
         bool WalkStep(Vector3 step)
@@ -177,8 +178,9 @@ namespace OrbitDominion
             astronaut.transform.localRotation = Quaternion.Euler(0, walk.heading, 0);
             Vector3 focus = explorerLocal + Vector3.up * 1.5f;
             Vector3 direction = Quaternion.Euler(Mathf.Clamp(pitch, -25, 55), walkCameraYaw, 0) * Vector3.forward;
-            Vector3 shoulder = Quaternion.Euler(0, walkCameraYaw, 0) * Vector3.right * (aiming ? .65f : .32f);
-            Vector3 desired = focus - direction * (aiming ? 2.7f : 5.2f) + Vector3.up * (aiming ? .15f : .6f) + shoulder;
+            aimCameraBlend = immediate ? (aiming ? 1 : 0) : Mathf.MoveTowards(aimCameraBlend,aiming ? 1 : 0,Time.deltaTime*6);
+            Vector3 shoulder = Quaternion.Euler(0, walkCameraYaw, 0) * Vector3.right * Mathf.Lerp(.32f,.68f,aimCameraBlend);
+            Vector3 desired = focus - direction * Mathf.Lerp(5.2f,2.6f,aimCameraBlend) + Vector3.up * Mathf.Lerp(.6f,.12f,aimCameraBlend) + shoulder;
             Vector3 localCamera = sceneRoot.InverseTransformPoint(lens.transform.position);
             desired = immediate ? desired : Vector3.Lerp(localCamera, desired, 1 - Mathf.Exp(-12 * Time.deltaTime));
             Vector3 delta = desired - focus;
@@ -204,8 +206,9 @@ namespace OrbitDominion
                 safe = sample;
             }
             lens.transform.position = sceneRoot.TransformPoint(safe);
-            Vector3 target = sceneRoot.TransformPoint(aiming ? focus + direction * 20 : focus + direction * .8f);
-            lens.transform.rotation = Quaternion.LookRotation(target - lens.transform.position, Vector3.up);
+            Vector3 target = sceneRoot.TransformPoint(focus + direction * .8f);
+            lens.transform.rotation = Quaternion.Slerp(Quaternion.LookRotation(target-lens.transform.position,Vector3.up),
+                Quaternion.LookRotation(sceneRoot.TransformDirection(direction),Vector3.up),aimCameraBlend);
             lens.fieldOfView = immediate ? (aiming ? 52 : 65) : Mathf.Lerp(lens.fieldOfView, aiming ? 52 : 65, 1 - Mathf.Exp(-12 * Time.deltaTime));
         }
     }

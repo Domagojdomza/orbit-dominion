@@ -25,7 +25,11 @@ namespace OrbitDominion
         Transform commandConsole;
         float hitMarker, incomingHit, rescue, firingPose;
         int groundShots, practiceHits;
-        bool aiming, sprinting;
+        bool aiming, sprinting, weaponRaised;
+        Vector3 groundAimPoint;
+        public bool GroundAimBlocked { get; private set; }
+        public bool GroundAimHostile { get; private set; }
+        public Vector3 GroundAimPoint => groundAimPoint;
         public SurfaceBattleState GroundBattle => battle;
         public IReadOnlyList<SurfaceContact> GroundContacts => contacts;
         public bool Aiming => OnFoot && aiming && !buildMode;
@@ -60,7 +64,8 @@ namespace OrbitDominion
 
         void BuildSurfaceBattle()
         {
-            aiming = sprinting = false; hitMarker = incomingHit = rescue = firingPose = 0; practiceHits = 0;
+            aiming = sprinting = weaponRaised = false; GroundAimBlocked = GroundAimHostile = false;
+            hitMarker = incomingHit = rescue = firingPose = 0; practiceHits = 0;
             shotMaterial = Make(new Color(.15f, .75f, 1), .1f, new Color(.2f, 2.6f, 4));
             hostileShotMaterial = Make(new Color(1, .2f, .07f), .1f, new Color(3, .25f, .05f));
             int faction = world.Empire.State.Get(PlanetId).faction;
@@ -116,7 +121,8 @@ namespace OrbitDominion
         {
             contacts.Clear(); groundBeams.Clear(); commandConsole = null;
             if (rifleClip != null) Destroy(rifleClip);
-            rifleClip = null; rifleAudio = null; aiming = sprinting = false;
+            rifleClip = null; rifleAudio = null; aiming = sprinting = weaponRaised = false;
+            GroundAimBlocked = GroundAimHostile = false;
         }
 
         void TickSurfaceBattle(float dt)
@@ -224,19 +230,29 @@ namespace OrbitDominion
         {
             if (keys.rKey.wasPressedThisFrame) ReloadRifle();
             if (Mouse.current?.leftButton.isPressed != true) return;
+            TryFireGround(groundAimPoint);
+        }
+
+        void UpdateRifleAim()
+        {
             var ray = lens.ViewportPointToRay(new Vector3(.5f, .5f, 0));
             Vector3 from = sceneRoot.InverseTransformPoint(ray.origin), goal = from + ray.direction * SurfaceBattleState.Range;
             float range = SurfaceBattleState.Range * TraceGroundCover(from, goal);
-            bool aimedContact = false;
+            bool aimedContact = false; GroundAimHostile = false;
             foreach (var actor in contacts) if (actor.vitals.Alive)
             {
                 float hit = CombatRules.SphereHit(from, ray.direction, actor.root.localPosition + Vector3.up * 1.25f, actor.training ? .55f : .43f);
                 hit = Mathf.Min(hit, CombatRules.SphereHit(from, ray.direction, actor.root.localPosition + Vector3.up * 1.82f, .22f));
-                if (hit < range) { range = hit; aimedContact = true; }
+                if (hit < range) { range = hit; aimedContact = true; GroundAimHostile = actor.hostile || actor.training; }
             }
             // Aim just inside the selected silhouette; the muzzle performs its own occlusion test.
             if (aimedContact) range += .12f;
-            TryFireGround(sceneRoot.TransformPoint(from + ray.direction * range));
+            groundAimPoint = sceneRoot.TransformPoint(from + ray.direction * range);
+            if(weaponRaised) astronaut.AlignRifle(groundAimPoint);
+            Vector3 muzzle = sceneRoot.InverseTransformPoint(astronaut.Muzzle);
+            Vector3 end = sceneRoot.InverseTransformPoint(groundAimPoint);
+            float distance = Vector3.Distance(muzzle,end);
+            GroundAimBlocked = weaponRaised && distance * (1 - TraceGroundCover(muzzle,end)) > .3f;
         }
 
         // Sampling covers terrain, lots and native geometry; hull rays catch thin ship surfaces.
